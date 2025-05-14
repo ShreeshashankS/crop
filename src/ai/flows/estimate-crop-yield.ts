@@ -11,8 +11,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { EstimateCropYieldInput as EstimateCropYieldInputType, EstimateCropYieldOutput as EstimateCropYieldOutputType } from '@/ai/flows/estimate-crop-yield';
-
 
 const EstimateCropYieldInputSchema = z.object({
   cropType: z.string().describe('The type of crop to estimate yield for.'),
@@ -63,13 +61,20 @@ const EstimateCropYieldOutputSchema = z.object({
 
 export type EstimateCropYieldOutput = z.infer<typeof EstimateCropYieldOutputSchema>;
 
-export async function estimateCropYield(input: EstimateCropYieldInputType): Promise<EstimateCropYieldOutputType> {
+// New schema for the prompt's direct input
+const PromptInputSchema = z.object({
+  cropType: z.string().describe('The type of crop to estimate yield for.'),
+  plotSize: z.number().describe('The size of the land plot in acres.'),
+  soilProperties: z.record(z.any()).describe('A key-value map of provided soil properties and their values.'),
+});
+
+export async function estimateCropYield(input: EstimateCropYieldInput): Promise<EstimateCropYieldOutput> {
   return estimateCropYieldFlow(input);
 }
 
 const prompt = ai.definePrompt({
   name: 'estimateCropYieldPrompt',
-  input: {schema: EstimateCropYieldInputSchema},
+  input: {schema: PromptInputSchema}, // Use the new PromptInputSchema
   output: {schema: EstimateCropYieldOutputSchema},
   prompt: `You are an expert agricultural consultant. Based on the provided crop type, plot size, and soil properties, estimate the total crop yield.
 
@@ -77,12 +82,10 @@ const prompt = ai.definePrompt({
   Plot Size: {{{plotSize}}} acres
 
   Soil Properties (only provided values are listed):
-  {{#each this as |propertyValue propertyKey|}}
-    {{#unless (or (eq propertyKey "cropType") (eq propertyKey "plotSize"))}}
-      {{#if (isPropertyValuePresent propertyValue)}}
-        - {{propertyKey}}: {{{propertyValue}}}
-      {{/if}}
-    {{/unless}}
+  {{#each soilProperties as |propertyValue propertyKey|}}
+    - {{propertyKey}}: {{{propertyValue}}}
+  {{else}}
+    No additional soil properties provided.
   {{/each}}
 
   Please provide:
@@ -91,27 +94,36 @@ const prompt = ai.definePrompt({
   - explanation: A brief explanation of the factors that influenced your estimation.
 
   You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.`,
-  templateHelpers: {
-    eq: function (arg1: any, arg2: any) { // options not needed for inline usage returning boolean
-      return String(arg1) == String(arg2);
-    },
-    isPropertyValuePresent: function(value: any) {
-      return value !== undefined && value !== null;
-    },
-    or: function(arg1: any, arg2: any) { // options not needed for inline usage returning boolean
-        return arg1 || arg2;
-    }
-  },
+  // templateHelpers removed as they are no longer needed for this logic
 });
 
 const estimateCropYieldFlow = ai.defineFlow(
   {
     name: 'estimateCropYieldFlow',
-    inputSchema: EstimateCropYieldInputSchema,
+    inputSchema: EstimateCropYieldInputSchema, // Flow still accepts the original input schema
     outputSchema: EstimateCropYieldOutputSchema,
   },
-  async (input: EstimateCropYieldInputType): Promise<EstimateCropYieldOutputType> => {
-    const llmResponse = await prompt(input);
+  async (rawInput: EstimateCropYieldInput): Promise<EstimateCropYieldOutput> => {
+    const soilPropertiesForPrompt: Record<string, any> = {};
+    for (const key in rawInput) {
+      if (Object.prototype.hasOwnProperty.call(rawInput, key)) {
+        if (key !== 'cropType' && key !== 'plotSize') {
+          // Cast key to keyof EstimateCropYieldInput for type safety
+          const value = rawInput[key as keyof EstimateCropYieldInput];
+          if (value !== undefined && value !== null) {
+            soilPropertiesForPrompt[key] = value;
+          }
+        }
+      }
+    }
+
+    const promptArgs = {
+      cropType: rawInput.cropType,
+      plotSize: rawInput.plotSize,
+      soilProperties: soilPropertiesForPrompt,
+    };
+
+    const llmResponse = await prompt(promptArgs);
 
     if (!llmResponse.output) {
       const rawText = llmResponse.text ?? "No raw text available from LLM.";
@@ -123,7 +135,7 @@ const estimateCropYieldFlow = ai.defineFlow(
       console.error('  Raw text response from LLM:', rawText);
       console.error('  Finish reason:', finishReason);
       console.error('  Safety ratings:', JSON.stringify(safetyRatings, null, 2));
-      console.error('  Input provided to LLM:', JSON.stringify(input, null, 2));
+      console.error('  Input provided to LLM:', JSON.stringify(promptArgs, null, 2));
 
 
       let userMessage = 'The AI model did not return a valid estimation. Please check server logs for details.';
