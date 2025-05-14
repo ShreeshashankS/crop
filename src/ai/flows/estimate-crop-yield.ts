@@ -79,9 +79,9 @@ const prompt = ai.definePrompt({
   Soil Properties (only provided values are listed):
   {{#each this as |propertyValue propertyKey|}}
     {{#unless (or (eq propertyKey "cropType") (eq propertyKey "plotSize"))}}
-      {{#is_present propertyValue}}
+      {{#if (isPropertyValuePresent propertyValue)}}
         - {{propertyKey}}: {{{propertyValue}}}
-      {{/is_present}}
+      {{/if}}
     {{/unless}}
   {{/each}}
 
@@ -92,17 +92,14 @@ const prompt = ai.definePrompt({
 
   You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.`,
   templateHelpers: {
-    eq: function (arg1: any, arg2: any, options: any) {
-      return (String(arg1) == String(arg2)) ? options.fn(this) : options.inverse(this);
+    eq: function (arg1: any, arg2: any) { // options not needed for inline usage returning boolean
+      return String(arg1) == String(arg2);
     },
-    is_present: function(value: any, options: any) {
-      if (value !== undefined && value !== null) {
-        return options.fn(this); 
-      }
-      return options.inverse(this);
+    isPropertyValuePresent: function(value: any) {
+      return value !== undefined && value !== null;
     },
-    or: function(arg1: any, arg2: any, options: any) {
-        return arg1 || arg2 ? options.fn(this) : options.inverse(this);
+    or: function(arg1: any, arg2: any) { // options not needed for inline usage returning boolean
+        return arg1 || arg2;
     }
   },
 });
@@ -138,7 +135,7 @@ const estimateCropYieldFlow = ai.defineFlow(
          userMessage = 'The AI model was unable to generate a response in the required format. It may have stopped prematurely or returned non-JSON text. Please check server logs.';
       } else if (['OTHER', 'UNKNOWN', 'UNSPECIFIED'].includes(finishReason)) {
         userMessage = 'An unexpected issue occurred with the AI model during generation. Please try again later or check server logs.';
-      } else if (!rawText.trim().startsWith('{') || !rawText.trim().endsWith('}')) {
+      } else if (rawText && (!rawText.trim().startsWith('{') || !rawText.trim().endsWith('}'))) {
          userMessage = 'The AI model response was not in the expected JSON format. It might be incomplete or contain extra text. Please check server logs.';
       }
       
