@@ -58,11 +58,15 @@ const EstimateCropYieldOutputSchema = z.object({
       upper: z.number().describe('The upper bound of the confidence interval for yield.'),
     })
     .describe('The confidence interval for the yield estimation.'),
-  marketPricePerKg: z.number().describe('The current market price per kilogram for the crop.'),
-  currency: z.string().describe('The currency symbol for the market price (e.g., INR), as returned by the getMarketPrice tool. This should match the currency provided by the tool.'),
-  priceUnit: z.string().describe('The unit for the market price (e.g., kg). Typically should be "kg" to match yield unit, as returned by the getMarketPrice tool.'),
+  marketPricePerKg: z.number().describe("The current market price per kilogram for the crop. THIS MUST BE THE EXACT NUMERIC 'price' VALUE AS RETURNED BY THE getMarketPrice TOOL."),
+  currency: z.string().describe(
+    "The currency symbol for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'currency' AS RETURNED BY THE getMarketPrice TOOL. For example, if the tool returns 'INR', this field MUST be 'INR'."
+  ),
+  priceUnit: z.string().describe(
+    "The unit for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'unit' AS RETURNED BY THE getMarketPrice TOOL. For example, if the tool returns 'kg', this field MUST be 'kg'."
+  ),
   estimatedTotalValue: z.number().describe('The total estimated market value of the crop yield, calculated as estimatedYield * marketPricePerKg.'),
-  explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation, including price information if available.'),
+  explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation, including price information if available. This explanation must reference the currency and unit obtained from the tool.'),
 });
 
 export type EstimateCropYieldOutput = z.infer<typeof EstimateCropYieldOutputSchema>;
@@ -85,10 +89,15 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert agricultural consultant and market analyst.
   Based on the provided crop type, plot size, and soil properties:
   1. Estimate the total crop yield in kilograms.
-  2. Use the 'getMarketPrice' tool to find the current market price per kilogram for the specified '{{{cropType}}}'. Ensure you use the price, currency, and unit exactly as provided by the tool.
-  3. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' obtained from the tool.
+  2. Use the 'getMarketPrice' tool to find the current market price for the specified '{{{cropType}}}'.
+     The tool will return an object with 'price', 'currency', and 'unit' fields.
+     When constructing your final JSON output:
+       - The 'marketPricePerKg' field MUST be the exact numeric value from the tool's 'price' output.
+       - The 'currency' field MUST be the exact string value from the tool's 'currency' output (e.g., if the tool returns 'INR', this field must be 'INR').
+       - The 'priceUnit' field MUST be the exact string value from the tool's 'unit' output (e.g., if the tool returns 'kg', this field must be 'kg').
+  3. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' obtained from the tool (which uses the tool's 'price' value).
   4. Provide a confidence interval for the yield estimation.
-  5. Provide an explanation that includes factors influencing yield and references the market price (including currency and unit from the tool) used.
+  5. Provide an explanation that includes factors influencing yield and references the market price, currency, and unit as obtained DIRECTLY from the tool.
 
   Crop Type: {{{cropType}}}
   Plot Size: {{{plotSize}}} acres
@@ -103,16 +112,16 @@ const prompt = ai.definePrompt({
   Please provide all fields as defined in the output schema, including:
   - estimatedYield (kg)
   - confidenceInterval (lower and upper bounds in kg)
-  - marketPricePerKg (from tool)
-  - currency (from tool, e.g., INR)
-  - priceUnit (from tool, ensure it's 'kg' or convert price to per kg)
+  - marketPricePerKg (This MUST be the numeric 'price' value directly from the 'getMarketPrice' tool's output.)
+  - currency (This MUST be the 'currency' string directly from the 'getMarketPrice' tool's output. For example, if the tool outputs 'INR' for currency, this field MUST be 'INR'.)
+  - priceUnit (This MUST be the 'unit' string directly from the 'getMarketPrice' tool's output. For example, if the tool outputs 'kg' for unit, this field MUST be 'kg'. If the tool provides a unit other than 'kg', use that unit and adjust marketPricePerKg label if necessary, but prefer 'kg' if conversion is simple for the tool.)
   - estimatedTotalValue
   - explanation
 
   You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.
-  If the tool provides a price in a unit other than per kg, you should attempt to convert it to per kg if feasible, or clearly state the priceUnit used for marketPricePerKg.
-  The estimatedTotalValue must be based on the yield in kg and price per kg.
-  The currency field in your output MUST match the currency field returned by the getMarketPrice tool.
+  The estimatedTotalValue must be based on the yield in kg and the price per kg derived from the tool's 'price' and 'unit'.
+  The currency field in your output MUST be the exact string value from the getMarketPrice tool's 'currency' output.
+  The priceUnit field in your output MUST be the exact string value from the getMarketPrice tool's 'unit' output.
   `,
 });
 
@@ -154,7 +163,7 @@ const estimateCropYieldFlow = ai.defineFlow(
       console.error('  Finish reason:', finishReason);
       console.error('  Safety ratings:', JSON.stringify(safetyRatings, null, 2));
       console.error('  Input provided to LLM:', JSON.stringify(promptArgs, null, 2));
-      console.error('  Tool calls made:', JSON.stringify(llmResponse.history, null, 2));
+      console.error('  Tool calls made by LLM (history):', JSON.stringify(llmResponse.history, null, 2));
 
 
       let userMessage = 'The AI model did not return a valid estimation. Please check server logs for details.';
