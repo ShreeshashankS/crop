@@ -89,7 +89,7 @@ export function CropYieldForm() {
     : [];
   
   const selectedCropLabel = form.watch('cropType');
-  const selectedCropIcon = DEFAULT_CROP_OPTIONS.find(c => c.value === selectedCropLabel || c.label === selectedCropLabel)?.icon || GENERAL_CROP_ICON;
+  const SelectedCropIcon = DEFAULT_CROP_OPTIONS.find(c => c.value === selectedCropLabel || c.label === selectedCropLabel)?.icon || GENERAL_CROP_ICON;
 
 
   return (
@@ -301,7 +301,7 @@ export function CropYieldForm() {
         <Card className="max-w-4xl mx-auto mt-8 shadow-xl">
           <CardHeader>
             <CardTitle className="text-2xl text-primary flex items-center">
-              {selectedCropIcon && <selectedCropIcon className="mr-3 h-8 w-8" />}
+              {SelectedCropIcon && <SelectedCropIcon className="mr-3 h-8 w-8" />}
               Estimated Yield for {selectedCropLabel || 'Selected Crop'} ({currentPlotSize} acres)
             </CardTitle>
           </CardHeader>
