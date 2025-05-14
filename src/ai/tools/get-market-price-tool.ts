@@ -11,7 +11,7 @@ import {z} from 'genkit';
 
 export const MarketPriceOutputSchema = z.object({
   price: z.number().describe('The market price of the crop.'),
-  currency: z.string().describe('The currency of the price (e.g., USD, EUR).'),
+  currency: z.string().describe('The currency of the price (e.g., INR, USD, EUR).'),
   unit: z.string().describe('The unit for the price (e.g., kg, bushel, ton).'),
   cropType: z.string().describe('The type of crop for which the price is provided.'),
 });
@@ -28,24 +28,24 @@ export const getMarketPriceTool = ai.defineTool(
   },
   async (input) => {
     // In a real application, this would call an external API to get live market data.
-    // For this example, we'll return mock data.
+    // For this example, we'll return mock data in INR.
     const crop = input.cropType.toLowerCase();
-    let price = 0.2; // Default price
-    const currency = 'USD';
+    let price = 16; // Default price in INR (approx 0.2 USD)
+    const currency = 'INR';
     const unit = 'kg';
 
     if (crop.includes('corn') || crop.includes('maize')) {
-      price = 0.22; // Fictional price for Corn
+      price = 18; // Fictional price for Corn in INR
     } else if (crop.includes('wheat')) {
-      price = 0.25; // Fictional price for Wheat
+      price = 20; // Fictional price for Wheat in INR
     } else if (crop.includes('soybean')) {
-      price = 0.45; // Fictional price for Soybeans
+      price = 35; // Fictional price for Soybeans in INR
     } else if (crop.includes('rice')) {
-      price = 0.70;
+      price = 55; // Fictional price for Rice in INR
     } else if (crop.includes('potatoes')) {
-      price = 0.50;
+      price = 40; // Fictional price for Potatoes in INR
     } else if (crop.includes('tomatoes')) {
-      price = 1.50;
+      price = 120; // Fictional price for Tomatoes in INR
     }
     // Add more mock prices as needed
 
@@ -58,3 +58,4 @@ export const getMarketPriceTool = ai.defineTool(
     };
   }
 );
+
