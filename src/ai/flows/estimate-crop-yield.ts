@@ -2,14 +2,16 @@
 'use server';
 
 /**
- * @fileOverview Estimates crop yield based on soil properties, crop type, and plot size.
+ * @fileOverview Estimates crop yield based on soil properties, crop type, and plot size,
+ * and also estimates the total market value using a market price tool.
  *
- * - estimateCropYield - A function that estimates crop yield.
+ * - estimateCropYield - A function that estimates crop yield and value.
  * - EstimateCropYieldInput - The input type for the estimateCropYield function.
  * - EstimateCropYieldOutput - The return type for the estimateCropYield function.
  */
 
 import {ai} from '@/ai/genkit';
+import {getMarketPriceTool} from '@/ai/tools/get-market-price-tool';
 import {z} from 'genkit';
 
 const EstimateCropYieldInputSchema = z.object({
@@ -52,16 +54,19 @@ const EstimateCropYieldOutputSchema = z.object({
   estimatedYield: z.number().describe('The total estimated crop yield in kilograms for the specified plot size.'),
   confidenceInterval: z
     .object({
-      lower: z.number().describe('The lower bound of the confidence interval.'),
-      upper: z.number().describe('The upper bound of the confidence interval.'),
+      lower: z.number().describe('The lower bound of the confidence interval for yield.'),
+      upper: z.number().describe('The upper bound of the confidence interval for yield.'),
     })
     .describe('The confidence interval for the yield estimation.'),
-  explanation: z.string().describe('An explanation of the factors influencing the yield estimation.'),
+  marketPricePerKg: z.number().describe('The current market price per kilogram for the crop.'),
+  currency: z.string().describe('The currency of the market price (e.g., USD).'),
+  priceUnit: z.string().describe('The unit for the market price (e.g., kg). Typically should be "kg" to match yield unit.'),
+  estimatedTotalValue: z.number().describe('The total estimated market value of the crop yield, calculated as estimatedYield * marketPricePerKg.'),
+  explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation, including price information if available.'),
 });
 
 export type EstimateCropYieldOutput = z.infer<typeof EstimateCropYieldOutputSchema>;
 
-// New schema for the prompt's direct input
 const PromptInputSchema = z.object({
   cropType: z.string().describe('The type of crop to estimate yield for.'),
   plotSize: z.number().describe('The size of the land plot in acres.'),
@@ -74,9 +79,16 @@ export async function estimateCropYield(input: EstimateCropYieldInput): Promise<
 
 const prompt = ai.definePrompt({
   name: 'estimateCropYieldPrompt',
-  input: {schema: PromptInputSchema}, // Use the new PromptInputSchema
+  input: {schema: PromptInputSchema},
   output: {schema: EstimateCropYieldOutputSchema},
-  prompt: `You are an expert agricultural consultant. Based on the provided crop type, plot size, and soil properties, estimate the total crop yield.
+  tools: [getMarketPriceTool],
+  prompt: `You are an expert agricultural consultant and market analyst.
+  Based on the provided crop type, plot size, and soil properties:
+  1. Estimate the total crop yield in kilograms.
+  2. Use the 'getMarketPrice' tool to find the current market price per kilogram for the specified '{{{cropType}}}'.
+  3. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' obtained from the tool.
+  4. Provide a confidence interval for the yield estimation.
+  5. Provide an explanation that includes factors influencing yield and references the market price used.
 
   Crop Type: {{{cropType}}}
   Plot Size: {{{plotSize}}} acres
@@ -88,19 +100,25 @@ const prompt = ai.definePrompt({
     No additional soil properties provided.
   {{/each}}
 
-  Please provide:
-  - estimatedYield: The total estimated crop yield in kilograms for the {{{plotSize}}}-acre plot.
-  - confidenceInterval: A confidence interval (lower and upper bounds) for your estimation in kilograms.
-  - explanation: A brief explanation of the factors that influenced your estimation.
+  Please provide all fields as defined in the output schema, including:
+  - estimatedYield (kg)
+  - confidenceInterval (lower and upper bounds in kg)
+  - marketPricePerKg (from tool)
+  - currency (from tool)
+  - priceUnit (from tool, ensure it's 'kg' or convert price to per kg)
+  - estimatedTotalValue
+  - explanation
 
-  You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.`,
-  // templateHelpers removed as they are no longer needed for this logic
+  You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.
+  If the tool provides a price in a unit other than per kg, you should attempt to convert it to per kg if feasible, or clearly state the priceUnit used for marketPricePerKg.
+  The estimatedTotalValue must be based on the yield in kg and price per kg.
+  `,
 });
 
 const estimateCropYieldFlow = ai.defineFlow(
   {
     name: 'estimateCropYieldFlow',
-    inputSchema: EstimateCropYieldInputSchema, // Flow still accepts the original input schema
+    inputSchema: EstimateCropYieldInputSchema,
     outputSchema: EstimateCropYieldOutputSchema,
   },
   async (rawInput: EstimateCropYieldInput): Promise<EstimateCropYieldOutput> => {
@@ -108,7 +126,6 @@ const estimateCropYieldFlow = ai.defineFlow(
     for (const key in rawInput) {
       if (Object.prototype.hasOwnProperty.call(rawInput, key)) {
         if (key !== 'cropType' && key !== 'plotSize') {
-          // Cast key to keyof EstimateCropYieldInput for type safety
           const value = rawInput[key as keyof EstimateCropYieldInput];
           if (value !== undefined && value !== null) {
             soilPropertiesForPrompt[key] = value;
@@ -136,6 +153,7 @@ const estimateCropYieldFlow = ai.defineFlow(
       console.error('  Finish reason:', finishReason);
       console.error('  Safety ratings:', JSON.stringify(safetyRatings, null, 2));
       console.error('  Input provided to LLM:', JSON.stringify(promptArgs, null, 2));
+      console.error('  Tool calls made:', JSON.stringify(llmResponse.history, null, 2));
 
 
       let userMessage = 'The AI model did not return a valid estimation. Please check server logs for details.';

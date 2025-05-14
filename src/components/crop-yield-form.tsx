@@ -5,11 +5,12 @@ import type { EstimateCropYieldOutput } from '@/ai/flows/estimate-crop-yield';
 import { handleEstimateCropYield } from '@/lib/actions';
 import { DEFAULT_CROP_OPTIONS, SOIL_PROPERTIES_CONFIG, GENERAL_CROP_ICON, type SoilPropertyConfig } from '@/lib/constants';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, ChevronsUpDown, Loader2, BarChart3, Square } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, ShoppingCart, Info } from 'lucide-react';
 import Image from 'next/image';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, ErrorBar } from 'recharts';
+// Graph imports removed as graph is no longer used
+// import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, ErrorBar } from 'recharts';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
@@ -65,7 +66,7 @@ export function CropYieldForm() {
       setEstimationResult(result.data);
       toast({
         title: 'Estimation Successful',
-        description: `Yield for ${data.cropType} on ${data.plotSize} acres estimated.`,
+        description: `Yield and value for ${data.cropType} on ${data.plotSize} acres estimated.`,
       });
     } else {
       toast({
@@ -77,17 +78,6 @@ export function CropYieldForm() {
   }
 
   const currentPlotSize = form.watch('plotSize');
-
-  const chartData = estimationResult
-    ? [
-        {
-          name: estimationResult.estimatedYield > 10000 ? `Yield (Tons / ${currentPlotSize} ac)` : `Yield (kg / ${currentPlotSize} ac)`,
-          value: estimationResult.estimatedYield > 10000 ? estimationResult.estimatedYield / 1000 : estimationResult.estimatedYield,
-          confidence: estimationResult.estimatedYield > 10000 ? [estimationResult.confidenceInterval.lower / 1000, estimationResult.confidenceInterval.upper / 1000] : [estimationResult.confidenceInterval.lower, estimationResult.confidenceInterval.upper]
-        },
-      ]
-    : [];
-  
   const selectedCropLabel = form.watch('cropType');
   const SelectedCropIcon = DEFAULT_CROP_OPTIONS.find(c => c.value === selectedCropLabel || c.label === selectedCropLabel)?.icon || GENERAL_CROP_ICON;
 
@@ -100,7 +90,7 @@ export function CropYieldForm() {
             <Image src="https://placehold.co/80x80.png" alt="CropPredict Logo" width={80} height={80} className="rounded-lg mr-4" data-ai-hint="agriculture logo" />
             <div>
               <CardTitle className="text-3xl font-bold text-primary">CropPredict</CardTitle>
-              <CardDescription className="text-lg">AI-Powered Crop Yield Estimator</CardDescription>
+              <CardDescription className="text-lg">AI-Powered Crop Yield & Value Estimator</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -139,8 +129,6 @@ export function CropYieldForm() {
                             <CommandInput 
                               placeholder="Search crop or type custom..."
                               onValueChange={(currentValue) => {
-                                  // Allow free text entry by directly setting field value
-                                  // Update: if a predefined option is not exactly matched, treat as custom input.
                                   const matchedOption = DEFAULT_CROP_OPTIONS.find(crop => crop.label.toLowerCase() === currentValue.toLowerCase());
                                   if (matchedOption) {
                                     field.onChange(matchedOption.label);
@@ -218,7 +206,6 @@ export function CropYieldForm() {
                       name={prop.id as keyof CropYieldFormData}
                       render={({ field }) => {
                         const IconComponent = prop.icon;
-                        // Ensure field.value is treated as number for calculations, but handle NaN for display
                         const numericValue = typeof field.value === 'string' ? parseFloat(field.value) : field.value as number;
 
                         return (
@@ -239,10 +226,8 @@ export function CropYieldForm() {
                                       {...field}
                                       onChange={(e) => {
                                         const val = parseFloat(e.target.value);
-                                        // Pass undefined if NaN so Zod optional validation works correctly
                                         field.onChange(isNaN(val) ? undefined : val); 
                                       }}
-                                      // Display empty string if value is undefined or NaN
                                       value={field.value === undefined || isNaN(field.value as number) ? '' : field.value}
                                       placeholder={(prop.defaultValue !== undefined) ? String(prop.defaultValue) : ''}
                                       className="w-24"
@@ -287,7 +272,7 @@ export function CropYieldForm() {
                   ) : (
                     <>
                       <BarChart3 className="mr-2 h-5 w-5" />
-                      Get Yield Estimate
+                      Get Yield & Value Estimate
                     </>
                   )}
                 </Button>
@@ -302,61 +287,51 @@ export function CropYieldForm() {
           <CardHeader>
             <CardTitle className="text-2xl text-primary flex items-center">
               {SelectedCropIcon && <SelectedCropIcon className="mr-3 h-8 w-8" />}
-              Estimated Yield for {selectedCropLabel || 'Selected Crop'} ({currentPlotSize} acres)
+              Estimated Yield & Value for {selectedCropLabel || 'Selected Crop'} ({currentPlotSize} acres)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div>
-              <h3 className="font-semibold text-lg">Numerical Results:</h3>
-              <p className="text-xl">
-                Estimated Yield: <strong className="text-accent">{estimationResult.estimatedYield.toLocaleString()} kg</strong>
-              </p>
-              <p>
-                Confidence Interval: {estimationResult.confidenceInterval.lower.toLocaleString()} kg - {estimationResult.confidenceInterval.upper.toLocaleString()} kg
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="font-semibold text-lg flex items-center mb-2">
+                  <Leaf className="mr-2 h-5 w-5 text-green-600" />
+                  Yield Estimation
+                </h3>
+                <p className="text-xl">
+                  Estimated Yield: <strong className="text-accent">{estimationResult.estimatedYield.toLocaleString()} kg</strong>
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Confidence Interval: {estimationResult.confidenceInterval.lower.toLocaleString()} kg - {estimationResult.confidenceInterval.upper.toLocaleString()} kg
+                </p>
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg flex items-center mb-2">
+                   <DollarSign className="mr-2 h-5 w-5 text-yellow-500" />
+                   Market Value Estimation
+                </h3>
+                <p className="text-xl">
+                  Estimated Total Value: <strong className="text-accent">
+                    {estimationResult.estimatedTotalValue.toLocaleString()} {estimationResult.currency}
+                  </strong>
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Market Price: {estimationResult.marketPricePerKg.toLocaleString()} {estimationResult.currency} / {estimationResult.priceUnit}
+                </p>
+              </div>
             </div>
+            
             <div>
-              <h3 className="font-semibold text-lg">Explanation:</h3>
-              <p className="text-muted-foreground italic">{estimationResult.explanation}</p>
+              <h3 className="font-semibold text-lg flex items-center mb-2">
+                <Info className="mr-2 h-5 w-5 text-blue-500" />
+                Explanation
+              </h3>
+              <p className="text-muted-foreground italic bg-muted p-3 rounded-md">{estimationResult.explanation}</p>
             </div>
-            <div>
-              <h3 className="font-semibold text-lg mb-2">Yield Graph (Total for {currentPlotSize} acres):</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis 
-                    label={{ 
-                      value: estimationResult.estimatedYield > 10000 ? 'Yield (Tons)' : 'Yield (kg)', 
-                      angle: -90, 
-                      position: 'insideLeft',
-                      style: { textAnchor: 'middle' }
-                    }}
-                    domain={['auto', 'auto']}
-                  />
-                  <Tooltip 
-                    formatter={(value, name, props) => {
-                      if (name.startsWith('Yield') && props.payload.confidence) {
-                         const unit = estimationResult.estimatedYield > 10000 ? 'Tons' : 'kg';
-                         const formattedValue = (value as number).toLocaleString();
-                         const confLower = props.payload.confidence[0].toLocaleString();
-                         const confUpper = props.payload.confidence[1].toLocaleString();
-                         return [`${formattedValue} ${unit}`, `Confidence: ${confLower} - ${confUpper} ${unit}`];
-                      }
-                      return value;
-                    }}
-                  />
-                  <Legend />
-                  <Bar dataKey="value" name={estimationResult.estimatedYield > 10000 ? "Est. Yield (Tons)" : "Est. Yield (kg)"} fill="var(--color-primary)" /* Changed from var(--chart-1) to var(--color-primary) */>
-                    <ErrorBar dataKey="confidence" width={15} strokeWidth={2} stroke="var(--color-accent)" /* Changed from var(--chart-2) to var(--color-accent) */ direction="y" />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            
+            {/* Graph section removed */}
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
-
