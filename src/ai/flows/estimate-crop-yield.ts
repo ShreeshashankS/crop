@@ -11,6 +11,8 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import type { EstimateCropYieldInput as EstimateCropYieldInputType, EstimateCropYieldOutput as EstimateCropYieldOutputType } from '@/ai/flows/estimate-crop-yield';
+
 
 const EstimateCropYieldInputSchema = z.object({
   cropType: z.string().describe('The type of crop to estimate yield for.'),
@@ -60,7 +62,7 @@ const EstimateCropYieldOutputSchema = z.object({
 
 export type EstimateCropYieldOutput = z.infer<typeof EstimateCropYieldOutputSchema>;
 
-export async function estimateCropYield(input: EstimateCropYieldInput): Promise<EstimateCropYieldOutput> {
+export async function estimateCropYield(input: EstimateCropYieldInputType): Promise<EstimateCropYieldOutputType> {
   return estimateCropYieldFlow(input);
 }
 
@@ -106,8 +108,37 @@ const estimateCropYieldFlow = ai.defineFlow(
     inputSchema: EstimateCropYieldInputSchema,
     outputSchema: EstimateCropYieldOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
-    return output!;
+  async (input: EstimateCropYieldInputType): Promise<EstimateCropYieldOutputType> => {
+    const llmResponse = await prompt(input);
+
+    if (!llmResponse.output) {
+      const rawText = llmResponse.text ?? "No raw text available from LLM.";
+      // Accessing finishReason and safetyRatings from the first candidate
+      const firstCandidate = llmResponse.candidates?.[0];
+      const finishReason = firstCandidate?.finishReason ?? "Unknown finish reason.";
+      const safetyRatings = firstCandidate?.safetyRatings ?? [];
+      
+      console.error('LLM did not return valid structured output.');
+      console.error('Raw text response from LLM:', rawText);
+      console.error('Finish reason:', finishReason);
+      console.error('Safety ratings:', JSON.stringify(safetyRatings, null, 2));
+
+      let userMessage = 'The AI model did not return a valid estimation.';
+      if (finishReason === 'SAFETY') {
+        userMessage = 'The AI model could not provide an estimation due to safety concerns with the input or output. Please revise your input or check safety settings.';
+      } else if (finishReason === 'STOP' && (!rawText || !rawText.trim().startsWith('{'))) { 
+         userMessage = 'The AI model was unable to generate a response in the required format. Please try again or adjust your inputs.'
+      } else if (finishReason === 'MAX_TOKENS') {
+        userMessage = 'The AI model response was too long. Please try with more specific inputs.';
+      } else if (['OTHER', 'UNKNOWN', 'UNSPECIFIED'].includes(finishReason)) {
+        userMessage = 'An unexpected issue occurred with the AI model. Please try again later.';
+      } else if (!rawText || !rawText.trim().startsWith('{')) {
+        // Fallback if finishReason is 'STOP' but output is not JSON-like
+        userMessage = 'The AI model response was not in the expected JSON format. Please check server logs for details.';
+      }
+      
+      throw new Error(userMessage);
+    }
+    return llmResponse.output;
   }
 );
