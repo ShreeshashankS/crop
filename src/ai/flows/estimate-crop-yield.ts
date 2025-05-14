@@ -2,7 +2,7 @@
 'use server';
 
 /**
- * @fileOverview Estimates crop yield based on soil properties and crop type.
+ * @fileOverview Estimates crop yield based on soil properties, crop type, and plot size.
  *
  * - estimateCropYield - A function that estimates crop yield.
  * - EstimateCropYieldInput - The input type for the estimateCropYield function.
@@ -16,6 +16,7 @@ import type { EstimateCropYieldInput as EstimateCropYieldInputType, EstimateCrop
 
 const EstimateCropYieldInputSchema = z.object({
   cropType: z.string().describe('The type of crop to estimate yield for.'),
+  plotSize: z.number().describe('The size of the land plot in acres.'),
   magnesium: z.number().describe('Magnesium content in the soil (ppm)').optional(),
   sodium: z.number().describe('Sodium content in the soil (ppm)').optional(),
   nitrogen: z.number().describe('Nitrogen content in the soil (ppm)').optional(),
@@ -50,7 +51,7 @@ const EstimateCropYieldInputSchema = z.object({
 export type EstimateCropYieldInput = z.infer<typeof EstimateCropYieldInputSchema>;
 
 const EstimateCropYieldOutputSchema = z.object({
-  estimatedYield: z.number().describe('The estimated crop yield in kilograms per 2-acre land space.'),
+  estimatedYield: z.number().describe('The total estimated crop yield in kilograms for the specified plot size.'),
   confidenceInterval: z
     .object({
       lower: z.number().describe('The lower bound of the confidence interval.'),
@@ -70,25 +71,26 @@ const prompt = ai.definePrompt({
   name: 'estimateCropYieldPrompt',
   input: {schema: EstimateCropYieldInputSchema},
   output: {schema: EstimateCropYieldOutputSchema},
-  prompt: `You are an expert agricultural consultant. Based on the provided soil properties and crop type, estimate the crop yield for a 2-acre land space.
+  prompt: `You are an expert agricultural consultant. Based on the provided crop type, plot size, and soil properties, estimate the total crop yield.
 
   Crop Type: {{{cropType}}}
+  Plot Size: {{{plotSize}}} acres
 
-  Soil Properties:
+  Soil Properties (only provided values are listed):
   {{#each this as |propertyValue propertyKey|}}
-    {{#unless (eq propertyKey "cropType")}}
+    {{#unless (or (eq propertyKey "cropType") (eq propertyKey "plotSize"))}}
       {{#is_present propertyValue}}
-        {{propertyKey}}: {{{propertyValue}}}
+        - {{propertyKey}}: {{{propertyValue}}}
       {{/is_present}}
     {{/unless}}
   {{/each}}
 
   Please provide:
-  - estimatedYield: The estimated crop yield in kilograms.
-  - confidenceInterval: A confidence interval (lower and upper bounds) for your estimation.
+  - estimatedYield: The total estimated crop yield in kilograms for the {{{plotSize}}}-acre plot.
+  - confidenceInterval: A confidence interval (lower and upper bounds) for your estimation in kilograms.
   - explanation: A brief explanation of the factors that influenced your estimation.
 
-  You must output valid JSON.`,
+  You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.`,
   templateHelpers: {
     eq: function (arg1: any, arg2: any, options: any) {
       return (String(arg1) == String(arg2)) ? options.fn(this) : options.inverse(this);
@@ -98,6 +100,9 @@ const prompt = ai.definePrompt({
         return options.fn(this); 
       }
       return options.inverse(this);
+    },
+    or: function(arg1: any, arg2: any, options: any) {
+        return arg1 || arg2 ? options.fn(this) : options.inverse(this);
     }
   },
 });
@@ -113,28 +118,28 @@ const estimateCropYieldFlow = ai.defineFlow(
 
     if (!llmResponse.output) {
       const rawText = llmResponse.text ?? "No raw text available from LLM.";
-      // Accessing finishReason and safetyRatings from the first candidate
       const firstCandidate = llmResponse.candidates?.[0];
-      const finishReason = firstCandidate?.finishReason ?? "Unknown finish reason.";
+      const finishReason = firstCandidate?.finishReason ?? "Unknown";
       const safetyRatings = firstCandidate?.safetyRatings ?? [];
       
-      console.error('LLM did not return valid structured output.');
-      console.error('Raw text response from LLM:', rawText);
-      console.error('Finish reason:', finishReason);
-      console.error('Safety ratings:', JSON.stringify(safetyRatings, null, 2));
+      console.error('LLM did not return valid structured output. Details:');
+      console.error('  Raw text response from LLM:', rawText);
+      console.error('  Finish reason:', finishReason);
+      console.error('  Safety ratings:', JSON.stringify(safetyRatings, null, 2));
+      console.error('  Input provided to LLM:', JSON.stringify(input, null, 2));
 
-      let userMessage = 'The AI model did not return a valid estimation.';
+
+      let userMessage = 'The AI model did not return a valid estimation. Please check server logs for details.';
       if (finishReason === 'SAFETY') {
-        userMessage = 'The AI model could not provide an estimation due to safety concerns with the input or output. Please revise your input or check safety settings.';
-      } else if (finishReason === 'STOP' && (!rawText || !rawText.trim().startsWith('{'))) { 
-         userMessage = 'The AI model was unable to generate a response in the required format. Please try again or adjust your inputs.'
+        userMessage = 'The AI model could not provide an estimation due to safety concerns. Please revise your input or check safety settings.';
       } else if (finishReason === 'MAX_TOKENS') {
-        userMessage = 'The AI model response was too long. Please try with more specific inputs.';
+        userMessage = 'The AI model response was too long. Please try with more specific inputs or a smaller plot size.';
+      } else if (finishReason === 'STOP' && (!rawText || !rawText.trim().startsWith('{'))) { 
+         userMessage = 'The AI model was unable to generate a response in the required format. It may have stopped prematurely or returned non-JSON text. Please check server logs.';
       } else if (['OTHER', 'UNKNOWN', 'UNSPECIFIED'].includes(finishReason)) {
-        userMessage = 'An unexpected issue occurred with the AI model. Please try again later.';
-      } else if (!rawText || !rawText.trim().startsWith('{')) {
-        // Fallback if finishReason is 'STOP' but output is not JSON-like
-        userMessage = 'The AI model response was not in the expected JSON format. Please check server logs for details.';
+        userMessage = 'An unexpected issue occurred with the AI model during generation. Please try again later or check server logs.';
+      } else if (!rawText.trim().startsWith('{') || !rawText.trim().endsWith('}')) {
+         userMessage = 'The AI model response was not in the expected JSON format. It might be incomplete or contain extra text. Please check server logs.';
       }
       
       throw new Error(userMessage);

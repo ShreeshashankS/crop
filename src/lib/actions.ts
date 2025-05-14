@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 const EstimateCropYieldInputSchema = z.object({
   cropType: z.string().min(1, "Crop type is required."),
+  plotSize: z.coerce.number().min(0.01, "Plot size must be at least 0.01 acres."),
   magnesium: z.coerce.number().optional(),
   sodium: z.coerce.number().optional(),
   nitrogen: z.coerce.number().optional(),
@@ -43,7 +44,6 @@ export async function handleEstimateCropYield(
   try {
     const validatedData = EstimateCropYieldInputSchema.parse(data);
     
-    // Filter out undefined values, as AI model might not expect them explicitly as undefined
     const cleanedData = Object.fromEntries(
         Object.entries(validatedData).filter(([_, v]) => v !== undefined)
     ) as EstimateCropYieldInput;
@@ -52,13 +52,19 @@ export async function handleEstimateCropYield(
     if (!cleanedData.cropType) {
       return { success: false, error: "Crop type is required." };
     }
+     if (cleanedData.plotSize === undefined) { // Should be caught by Zod, but as a safeguard
+      return { success: false, error: "Plot size is required." };
+    }
     
     const result = await estimateCropYield(cleanedData);
     return { success: true, data: result };
   } catch (error) {
-    console.error('Error estimating crop yield:', error);
+    console.error('Error in handleEstimateCropYield:', error);
     if (error instanceof z.ZodError) {
-      return { success: false, error: JSON.stringify(error.errors) };
+      return { success: false, error: error.errors.map(e => `${e.path.join('.')} - ${e.message}`).join(', ') };
+    }
+    if (error instanceof Error && error.message) {
+      return { success: false, error: error.message };
     }
     return { success: false, error: 'Failed to estimate crop yield. Please try again.' };
   }

@@ -1,13 +1,14 @@
+
 'use client';
 
 import type { EstimateCropYieldOutput } from '@/ai/flows/estimate-crop-yield';
 import { handleEstimateCropYield } from '@/lib/actions';
 import { DEFAULT_CROP_OPTIONS, SOIL_PROPERTIES_CONFIG, GENERAL_CROP_ICON, type SoilPropertyConfig } from '@/lib/constants';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, ChevronsUpDown, Loader2, BarChart3 } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, BarChart3, Square } from 'lucide-react';
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, ErrorBar } from 'recharts';
 import { z } from 'zod';
 
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils';
 
 const formSchemaObject = {
   cropType: z.string().min(1, 'Crop type is required.'),
+  plotSize: z.coerce.number().min(0.01, "Plot size must be at least 0.01 acres."),
   ...Object.fromEntries(
     SOIL_PROPERTIES_CONFIG.map((prop) => [
       prop.id,
@@ -47,6 +49,7 @@ export function CropYieldForm() {
     resolver: zodResolver(FormSchema),
     defaultValues: {
       cropType: '',
+      plotSize: 2, // Default plot size
       ...Object.fromEntries(SOIL_PROPERTIES_CONFIG.map((prop) => [prop.id, prop.defaultValue])),
     },
   });
@@ -62,7 +65,7 @@ export function CropYieldForm() {
       setEstimationResult(result.data);
       toast({
         title: 'Estimation Successful',
-        description: `Yield for ${data.cropType} estimated.`,
+        description: `Yield for ${data.cropType} on ${data.plotSize} acres estimated.`,
       });
     } else {
       toast({
@@ -73,10 +76,12 @@ export function CropYieldForm() {
     }
   }
 
+  const currentPlotSize = form.watch('plotSize');
+
   const chartData = estimationResult
     ? [
         {
-          name: estimationResult.estimatedYield > 10000 ? 'Yield (Tons)' : 'Yield (kg)',
+          name: estimationResult.estimatedYield > 10000 ? `Yield (Tons / ${currentPlotSize} ac)` : `Yield (kg / ${currentPlotSize} ac)`,
           value: estimationResult.estimatedYield > 10000 ? estimationResult.estimatedYield / 1000 : estimationResult.estimatedYield,
           confidence: estimationResult.estimatedYield > 10000 ? [estimationResult.confidenceInterval.lower / 1000, estimationResult.confidenceInterval.upper / 1000] : [estimationResult.confidenceInterval.lower, estimationResult.confidenceInterval.upper]
         },
@@ -84,7 +89,7 @@ export function CropYieldForm() {
     : [];
   
   const selectedCropLabel = form.watch('cropType');
-  const selectedCropIcon = DEFAULT_CROP_OPTIONS.find(c => c.value === selectedCropLabel)?.icon || GENERAL_CROP_ICON;
+  const selectedCropIcon = DEFAULT_CROP_OPTIONS.find(c => c.value === selectedCropLabel || c.label === selectedCropLabel)?.icon || GENERAL_CROP_ICON;
 
 
   return (
@@ -95,86 +100,106 @@ export function CropYieldForm() {
             <Image src="https://placehold.co/80x80.png" alt="CropPredict Logo" width={80} height={80} className="rounded-lg mr-4" data-ai-hint="agriculture logo" />
             <div>
               <CardTitle className="text-3xl font-bold text-primary">CropPredict</CardTitle>
-              <CardDescription className="text-lg">AI-Powered Crop Yield Estimator (2-Acre Plot)</CardDescription>
+              <CardDescription className="text-lg">AI-Powered Crop Yield Estimator</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <FormField
-                control={form.control}
-                name="cropType"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel className="font-semibold text-lg mb-1">Select or Enter Crop Type</FormLabel>
-                    <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className={cn(
-                              'w-full justify-between',
-                              !field.value && 'text-muted-foreground'
-                            )}
-                          >
-                            {field.value
-                              ? DEFAULT_CROP_OPTIONS.find(
-                                  (crop) => crop.value === field.value || crop.label.toLowerCase() === field.value.toLowerCase()
-                                )?.label || field.value
-                              : 'Select crop...'}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                        <Command>
-                          <CommandInput 
-                            placeholder="Search crop or type custom..."
-                            onValueChange={(currentValue) => {
-                                // Allow custom input by setting value if not found in list
-                                if (!DEFAULT_CROP_OPTIONS.some(crop => crop.label.toLowerCase().includes(currentValue.toLowerCase()))) {
-                                    field.onChange(currentValue);
-                                }
-                            }}
-                          />
-                          <CommandList>
-                            <CommandEmpty>No crop found. Type to add custom.</CommandEmpty>
-                            <CommandGroup>
-                              {DEFAULT_CROP_OPTIONS.map((crop) => (
-                                <CommandItem
-                                  value={crop.label}
-                                  key={crop.value}
-                                  onSelect={() => {
-                                    form.setValue('cropType', crop.label); // Store label for display and AI
-                                    setComboboxOpen(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      'mr-2 h-4 w-4',
-                                      crop.label === field.value || crop.value === field.value ? 'opacity-100' : 'opacity-0'
-                                    )}
-                                  />
-                                  {crop.icon && <crop.icon className="mr-2 h-4 w-4" />}
-                                  {crop.label}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                <FormField
+                  control={form.control}
+                  name="cropType"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="font-semibold text-lg mb-1">Select or Enter Crop Type</FormLabel>
+                      <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className={cn(
+                                'w-full justify-between',
+                                !field.value && 'text-muted-foreground'
+                              )}
+                            >
+                              {field.value
+                                ? DEFAULT_CROP_OPTIONS.find(
+                                    (crop) => crop.value === field.value || crop.label.toLowerCase() === field.value.toLowerCase()
+                                  )?.label || field.value
+                                : 'Select crop...'}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                          <Command>
+                            <CommandInput 
+                              placeholder="Search crop or type custom..."
+                              onValueChange={(currentValue) => {
+                                  if (!DEFAULT_CROP_OPTIONS.some(crop => crop.label.toLowerCase().includes(currentValue.toLowerCase()))) {
+                                      field.onChange(currentValue);
+                                  }
+                              }}
+                            />
+                            <CommandList>
+                              <CommandEmpty>No crop found. Type to add custom.</CommandEmpty>
+                              <CommandGroup>
+                                {DEFAULT_CROP_OPTIONS.map((crop) => (
+                                  <CommandItem
+                                    value={crop.label}
+                                    key={crop.value}
+                                    onSelect={() => {
+                                      form.setValue('cropType', crop.label);
+                                      setComboboxOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        'mr-2 h-4 w-4',
+                                        crop.label === field.value || crop.value === field.value ? 'opacity-100' : 'opacity-0'
+                                      )}
+                                    />
+                                    {crop.icon && <crop.icon className="mr-2 h-4 w-4" />}
+                                    {crop.label}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="plotSize"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="font-semibold text-lg mb-1 flex items-center">
+                        <Square className="mr-2 h-5 w-5 text-primary" />
+                        Plot Size (acres)
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.1" {...field} 
+                         onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                        />
+                      </FormControl>
+                       <FormDescription>Enter the total acreage of the plot.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <Card>
                 <CardHeader>
                   <CardTitle className="text-xl text-primary">Soil & Environmental Properties</CardTitle>
-                  <CardDescription>Adjust the sliders or enter values directly for each property.</CardDescription>
+                  <CardDescription>Adjust the sliders or enter values directly for each property. These are optional.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
                   {SOIL_PROPERTIES_CONFIG.map((prop: SoilPropertyConfig) => (
@@ -203,7 +228,8 @@ export function CropYieldForm() {
                                       max={prop.max}
                                       {...field}
                                       onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                                      value={numericValue ?? prop.defaultValue}
+                                      value={numericValue ?? ''} // Allow empty string for optional number fields initially
+                                      placeholder={(prop.defaultValue !== undefined) ? String(prop.defaultValue) : ''}
                                       className="w-24"
                                     />
                                   </FormControl>
@@ -211,9 +237,10 @@ export function CropYieldForm() {
                                     min={prop.min}
                                     max={prop.max}
                                     step={prop.step}
-                                    value={[numericValue ?? (prop.defaultValue as number)]}
+                                    value={numericValue !== undefined && !isNaN(numericValue) ? [numericValue] : (prop.defaultValue !== undefined ? [prop.defaultValue as number] : [prop.min ?? 0])}
                                     onValueChange={(value) => field.onChange(value[0])}
                                     className="flex-1"
+                                    disabled={numericValue === undefined || isNaN(numericValue)} // Disable slider if input is empty/NaN
                                   />
                                 </div>
                               </>
@@ -221,7 +248,7 @@ export function CropYieldForm() {
                               <FormControl>
                                 <Textarea
                                   {...field}
-                                  value={field.value as string ?? prop.defaultValue}
+                                  value={field.value as string ?? ''}
                                   placeholder={prop.description || `Enter ${prop.label}`}
                                 />
                               </FormControl>
@@ -260,7 +287,7 @@ export function CropYieldForm() {
           <CardHeader>
             <CardTitle className="text-2xl text-primary flex items-center">
               {selectedCropIcon && <selectedCropIcon className="mr-3 h-8 w-8" />}
-              Estimated Yield for {selectedCropLabel || 'Selected Crop'}
+              Estimated Yield for {selectedCropLabel || 'Selected Crop'} ({currentPlotSize} acres)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -278,7 +305,7 @@ export function CropYieldForm() {
               <p className="text-muted-foreground italic">{estimationResult.explanation}</p>
             </div>
             <div>
-              <h3 className="font-semibold text-lg mb-2">Yield Graph:</h3>
+              <h3 className="font-semibold text-lg mb-2">Yield Graph (Total for {currentPlotSize} acres):</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -294,9 +321,12 @@ export function CropYieldForm() {
                   />
                   <Tooltip 
                     formatter={(value, name, props) => {
-                      if (name === 'value' && props.payload.confidence) {
+                      if (name.startsWith('Yield') && props.payload.confidence) {
                          const unit = estimationResult.estimatedYield > 10000 ? 'Tons' : 'kg';
-                         return [`${(value as number).toLocaleString()} ${unit}`, `Confidence: ${props.payload.confidence[0].toLocaleString()} - ${props.payload.confidence[1].toLocaleString()} ${unit}`];
+                         const formattedValue = (value as number).toLocaleString();
+                         const confLower = props.payload.confidence[0].toLocaleString();
+                         const confUpper = props.payload.confidence[1].toLocaleString();
+                         return [`${formattedValue} ${unit}`, `Confidence: ${confLower} - ${confUpper} ${unit}`];
                       }
                       return value;
                     }}
