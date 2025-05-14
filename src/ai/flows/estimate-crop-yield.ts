@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -70,11 +71,14 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert agricultural consultant. Based on the provided soil properties and crop type, estimate the crop yield for a 2-acre land space.
 
   Crop Type: {{{cropType}}}
+
   Soil Properties:
-  {{#each this}}
-    {{#if_not_empty this}}
-      {{@key}}: {{{this}}}
-    {{/if_not_empty}}
+  {{#each this as |propertyValue propertyKey|}}
+    {{#unless (eq propertyKey "cropType")}}
+      {{#is_present propertyValue}}
+        {{propertyKey}}: {{{propertyValue}}}
+      {{/is_present}}
+    {{/unless}}
   {{/each}}
 
   Please provide:
@@ -82,21 +86,17 @@ const prompt = ai.definePrompt({
   - confidenceInterval: A confidence interval (lower and upper bounds) for your estimation.
   - explanation: A brief explanation of the factors that influenced your estimation.
 
-  You must output valid JSON.
-
-  {{#each this}}
-  {{#if_not_empty this}}
-  {{/if_not_empty}}
-  {{/each}}
-  `,
+  You must output valid JSON.`,
   templateHelpers: {
-    if_not_empty: function (this: any, conditional: any, options: any) {
-      if (conditional) {
-        return options.fn(this);
-      } else {
-        return options.inverse(this);
-      }
+    eq: function (arg1: any, arg2: any, options: any) {
+      return (String(arg1) == String(arg2)) ? options.fn(this) : options.inverse(this);
     },
+    is_present: function(value: any, options: any) {
+      if (value !== undefined && value !== null) {
+        return options.fn(this); 
+      }
+      return options.inverse(this);
+    }
   },
 });
 
