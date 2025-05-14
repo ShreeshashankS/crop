@@ -59,8 +59,8 @@ const EstimateCropYieldOutputSchema = z.object({
     })
     .describe('The confidence interval for the yield estimation.'),
   marketPricePerKg: z.number().describe('The current market price per kilogram for the crop.'),
-  currency: z.string().describe('The currency of the market price (e.g., USD).'),
-  priceUnit: z.string().describe('The unit for the market price (e.g., kg). Typically should be "kg" to match yield unit.'),
+  currency: z.string().describe('The currency symbol for the market price (e.g., INR), as returned by the getMarketPrice tool. This should match the currency provided by the tool.'),
+  priceUnit: z.string().describe('The unit for the market price (e.g., kg). Typically should be "kg" to match yield unit, as returned by the getMarketPrice tool.'),
   estimatedTotalValue: z.number().describe('The total estimated market value of the crop yield, calculated as estimatedYield * marketPricePerKg.'),
   explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation, including price information if available.'),
 });
@@ -85,10 +85,10 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert agricultural consultant and market analyst.
   Based on the provided crop type, plot size, and soil properties:
   1. Estimate the total crop yield in kilograms.
-  2. Use the 'getMarketPrice' tool to find the current market price per kilogram for the specified '{{{cropType}}}'.
+  2. Use the 'getMarketPrice' tool to find the current market price per kilogram for the specified '{{{cropType}}}'. Ensure you use the price, currency, and unit exactly as provided by the tool.
   3. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' obtained from the tool.
   4. Provide a confidence interval for the yield estimation.
-  5. Provide an explanation that includes factors influencing yield and references the market price used.
+  5. Provide an explanation that includes factors influencing yield and references the market price (including currency and unit from the tool) used.
 
   Crop Type: {{{cropType}}}
   Plot Size: {{{plotSize}}} acres
@@ -104,7 +104,7 @@ const prompt = ai.definePrompt({
   - estimatedYield (kg)
   - confidenceInterval (lower and upper bounds in kg)
   - marketPricePerKg (from tool)
-  - currency (from tool)
+  - currency (from tool, e.g., INR)
   - priceUnit (from tool, ensure it's 'kg' or convert price to per kg)
   - estimatedTotalValue
   - explanation
@@ -112,6 +112,7 @@ const prompt = ai.definePrompt({
   You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.
   If the tool provides a price in a unit other than per kg, you should attempt to convert it to per kg if feasible, or clearly state the priceUnit used for marketPricePerKg.
   The estimatedTotalValue must be based on the yield in kg and price per kg.
+  The currency field in your output MUST match the currency field returned by the getMarketPrice tool.
   `,
 });
 
@@ -174,3 +175,4 @@ const estimateCropYieldFlow = ai.defineFlow(
     return llmResponse.output;
   }
 );
+
