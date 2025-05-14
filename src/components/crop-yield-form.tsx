@@ -139,8 +139,13 @@ export function CropYieldForm() {
                             <CommandInput 
                               placeholder="Search crop or type custom..."
                               onValueChange={(currentValue) => {
-                                  if (!DEFAULT_CROP_OPTIONS.some(crop => crop.label.toLowerCase().includes(currentValue.toLowerCase()))) {
-                                      field.onChange(currentValue);
+                                  // Allow free text entry by directly setting field value
+                                  // Update: if a predefined option is not exactly matched, treat as custom input.
+                                  const matchedOption = DEFAULT_CROP_OPTIONS.find(crop => crop.label.toLowerCase() === currentValue.toLowerCase());
+                                  if (matchedOption) {
+                                    field.onChange(matchedOption.label);
+                                  } else {
+                                    field.onChange(currentValue);
                                   }
                               }}
                             />
@@ -186,7 +191,11 @@ export function CropYieldForm() {
                       </FormLabel>
                       <FormControl>
                         <Input type="number" step="0.1" {...field} 
-                         onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                         onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            field.onChange(isNaN(val) ? undefined : val);
+                         }}
+                         value={field.value === undefined || isNaN(field.value as number) ? '' : field.value}
                         />
                       </FormControl>
                        <FormDescription>Enter the total acreage of the plot.</FormDescription>
@@ -209,7 +218,8 @@ export function CropYieldForm() {
                       name={prop.id as keyof CropYieldFormData}
                       render={({ field }) => {
                         const IconComponent = prop.icon;
-                        const numericValue = typeof field.value === 'string' && prop.type === 'number' ? parseFloat(field.value) : (field.value as number);
+                        // Ensure field.value is treated as number for calculations, but handle NaN for display
+                        const numericValue = typeof field.value === 'string' ? parseFloat(field.value) : field.value as number;
 
                         return (
                           <FormItem>
@@ -227,8 +237,13 @@ export function CropYieldForm() {
                                       min={prop.min}
                                       max={prop.max}
                                       {...field}
-                                      onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                                      value={numericValue ?? ''} // Allow empty string for optional number fields initially
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        // Pass undefined if NaN so Zod optional validation works correctly
+                                        field.onChange(isNaN(val) ? undefined : val); 
+                                      }}
+                                      // Display empty string if value is undefined or NaN
+                                      value={field.value === undefined || isNaN(field.value as number) ? '' : field.value}
                                       placeholder={(prop.defaultValue !== undefined) ? String(prop.defaultValue) : ''}
                                       className="w-24"
                                     />
@@ -237,10 +252,10 @@ export function CropYieldForm() {
                                     min={prop.min}
                                     max={prop.max}
                                     step={prop.step}
-                                    value={numericValue !== undefined && !isNaN(numericValue) ? [numericValue] : (prop.defaultValue !== undefined ? [prop.defaultValue as number] : [prop.min ?? 0])}
+                                    value={!isNaN(numericValue) ? [numericValue] : (prop.defaultValue !== undefined ? [prop.defaultValue as number] : [prop.min ?? 0])}
                                     onValueChange={(value) => field.onChange(value[0])}
                                     className="flex-1"
-                                    disabled={numericValue === undefined || isNaN(numericValue)} // Disable slider if input is empty/NaN
+                                    disabled={isNaN(numericValue)} 
                                   />
                                 </div>
                               </>
@@ -248,7 +263,7 @@ export function CropYieldForm() {
                               <FormControl>
                                 <Textarea
                                   {...field}
-                                  value={field.value as string ?? ''}
+                                  value={(field.value as string) ?? ''}
                                   placeholder={prop.description || `Enter ${prop.label}`}
                                 />
                               </FormControl>
@@ -332,8 +347,8 @@ export function CropYieldForm() {
                     }}
                   />
                   <Legend />
-                  <Bar dataKey="value" name={estimationResult.estimatedYield > 10000 ? "Est. Yield (Tons)" : "Est. Yield (kg)"} fill="var(--color-primary)">
-                    <ErrorBar dataKey="confidence" width={15} strokeWidth={2} stroke="var(--color-accent)" direction="y" />
+                  <Bar dataKey="value" name={estimationResult.estimatedYield > 10000 ? "Est. Yield (Tons)" : "Est. Yield (kg)"} fill="var(--color-primary)" /* Changed from var(--chart-1) to var(--color-primary) */>
+                    <ErrorBar dataKey="confidence" width={15} strokeWidth={2} stroke="var(--color-accent)" /* Changed from var(--chart-2) to var(--color-accent) */ direction="y" />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -344,3 +359,4 @@ export function CropYieldForm() {
     </div>
   );
 }
+
