@@ -60,13 +60,13 @@ const EstimateCropYieldOutputSchema = z.object({
     .describe('The confidence interval for the yield estimation.'),
   marketPricePerKg: z.number().describe("The current market price per kilogram for the crop. THIS MUST BE THE EXACT NUMERIC 'price' VALUE AS RETURNED BY THE getMarketPrice TOOL."),
   currency: z.string().describe(
-    "The currency symbol for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'currency' AS RETURNED BY THE getMarketPrice TOOL. For example, if the tool returns 'INR', this field MUST be 'INR'."
+    "The currency for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'currency' AS RETURNED BY THE getMarketPrice TOOL. The tool is configured to return 'INR', so this field MUST be 'INR'."
   ),
   priceUnit: z.string().describe(
-    "The unit for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'unit' AS RETURNED BY THE getMarketPrice TOOL. For example, if the tool returns 'kg', this field MUST be 'kg'."
+    "The unit for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'unit' AS RETURNED BY THE getMarketPrice TOOL. The tool typically returns 'kg'."
   ),
-  estimatedTotalValue: z.number().describe('The total estimated market value of the crop yield, calculated as estimatedYield * marketPricePerKg.'),
-  explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation, including price information if available. This explanation must reference the currency and unit obtained from the tool.'),
+  estimatedTotalValue: z.number().describe('The total estimated market value of the crop yield, calculated as estimatedYield * marketPricePerKg, reflecting the INR currency.'),
+  explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation. This explanation MUST reference the market price, currency (which will be INR), and unit as obtained directly from the getMarketPrice tool.'),
 });
 
 export type EstimateCropYieldOutput = z.infer<typeof EstimateCropYieldOutputSchema>;
@@ -90,14 +90,15 @@ const prompt = ai.definePrompt({
   Based on the provided crop type, plot size, and soil properties:
   1. Estimate the total crop yield in kilograms.
   2. Use the 'getMarketPrice' tool to find the current market price for the specified '{{{cropType}}}'.
-     The tool will return an object with 'price', 'currency', and 'unit' fields.
+     The tool will return an object with 'price' (numeric), 'currency' (string, e.g., "INR"), and 'unit' (string, e.g., "kg") fields.
+     IMPORTANT: The getMarketPrice tool is configured for the Indian market and will ALWAYS return the currency as 'INR'.
      When constructing your final JSON output:
        - The 'marketPricePerKg' field MUST be the exact numeric value from the tool's 'price' output.
-       - The 'currency' field MUST be the exact string value from the tool's 'currency' output (e.g., if the tool returns 'INR', this field must be 'INR').
-       - The 'priceUnit' field MUST be the exact string value from the tool's 'unit' output (e.g., if the tool returns 'kg', this field must be 'kg').
-  3. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' obtained from the tool (which uses the tool's 'price' value).
+       - The 'currency' field MUST be the exact string value from the tool's 'currency' output. Since the tool returns 'INR', this field MUST be 'INR'.
+       - The 'priceUnit' field MUST be the exact string value from the tool's 'unit' output.
+  3. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' (which is the tool's 'price' value). The total value should reflect the 'INR' currency.
   4. Provide a confidence interval for the yield estimation.
-  5. Provide an explanation that includes factors influencing yield and references the market price, currency, and unit as obtained DIRECTLY from the tool.
+  5. Provide an explanation. This explanation MUST explicitly state the market price, currency (which will be INR), and unit exactly as obtained from the getMarketPrice tool.
 
   Crop Type: {{{cropType}}}
   Plot Size: {{{plotSize}}} acres
@@ -109,19 +110,10 @@ const prompt = ai.definePrompt({
     No additional soil properties provided.
   {{/each}}
 
-  Please provide all fields as defined in the output schema, including:
-  - estimatedYield (kg)
-  - confidenceInterval (lower and upper bounds in kg)
-  - marketPricePerKg (This MUST be the numeric 'price' value directly from the 'getMarketPrice' tool's output.)
-  - currency (This MUST be the 'currency' string directly from the 'getMarketPrice' tool's output. For example, if the tool outputs 'INR' for currency, this field MUST be 'INR'.)
-  - priceUnit (This MUST be the 'unit' string directly from the 'getMarketPrice' tool's output. For example, if the tool outputs 'kg' for unit, this field MUST be 'kg'. If the tool provides a unit other than 'kg', use that unit and adjust marketPricePerKg label if necessary, but prefer 'kg' if conversion is simple for the tool.)
-  - estimatedTotalValue
-  - explanation
-
+  Please provide all fields as defined in the output schema.
+  Ensure the 'currency' field in your output is 'INR', as per the tool's output.
+  The estimatedTotalValue must be calculated using the 'price' from the tool and reflect 'INR'.
   You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.
-  The estimatedTotalValue must be based on the yield in kg and the price per kg derived from the tool's 'price' and 'unit'.
-  The currency field in your output MUST be the exact string value from the getMarketPrice tool's 'currency' output.
-  The priceUnit field in your output MUST be the exact string value from the getMarketPrice tool's 'unit' output.
   `,
 });
 
