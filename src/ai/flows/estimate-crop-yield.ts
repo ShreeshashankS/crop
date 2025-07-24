@@ -53,31 +53,44 @@ const EstimateCropYieldInputSchema = z.object({
 
 export type EstimateCropYieldInput = z.infer<typeof EstimateCropYieldInputSchema>;
 
-const EstimateCropYieldOutputSchema = z.object({
-  estimatedYield: z.number().describe('The total estimated crop yield in kilograms for the specified plot size. This MUST be the result of (yield per acre) * plotSize.'),
-  confidenceInterval: z
-    .object({
-      lower: z.number().describe('The lower bound of the confidence interval for yield.'),
-      upper: z.number().describe('The upper bound of the confidence interval for yield.'),
-    })
-    .describe('The confidence interval for the yield estimation.'),
-  marketPricePerKg: z.number().describe("The current market price per kilogram for the crop. THIS MUST BE THE EXACT NUMERIC 'price' VALUE AS RETURNED BY THE getMarketPrice TOOL."),
-  currency: z.string().describe(
-    "The currency for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'currency' AS RETURNED BY THE getMarketPrice TOOL. The tool is configured to return 'INR', so this field MUST be 'INR'."
-  ),
-  priceUnit: z.string().describe(
-    "The unit for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'unit' AS RETURNED BY THE getMarketPrice TOOL. The tool typically returns 'kg'."
-  ),
-  estimatedTotalValue: z.number().describe('The total estimated market value of the crop yield, calculated as estimatedYield * marketPricePerKg, reflecting the INR currency.'),
-  explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation. If a photo was provided, include visual analysis of the photo. If a weather forecast was retrieved, mention how it impacts the estimation. This explanation MUST reference the market price, currency (which will be INR), and unit as obtained directly from the getMarketPrice tool.'),
-  suggestions: z.array(z.string()).describe('Actionable suggestions to improve soil quality and crop yield for the selected crop. Provide at least 2-3 specific recommendations.'),
-});
 
+// The full output type that the user's frontend will receive.
+const EstimateCropYieldOutputSchema = z.object({
+  estimatedYield: z.number().describe('The total estimated crop yield in kilograms for the specified plot size.'),
+  confidenceInterval: z.object({
+    lower: z.number(),
+    upper: z.number(),
+  }),
+  marketPricePerKg: z.number(),
+  currency: z.string(),
+  priceUnit: z.string(),
+  estimatedTotalValue: z.number(),
+  explanation: z.string(),
+  suggestions: z.array(z.string()),
+});
 export type EstimateCropYieldOutput = z.infer<typeof EstimateCropYieldOutputSchema>;
+
+// This is what we now ask the AI to return. Notice it's per acre.
+const AIOutputSchema = z.object({
+    yieldPerAcre: z.number().describe('The estimated crop yield in kilograms for a single acre.'),
+    confidenceIntervalPerAcre: z
+      .object({
+        lower: z.number().describe('The lower bound of the confidence interval for yield for a single acre.'),
+        upper: z.number().describe('The upper bound of the confidence interval for yield for a single acre.'),
+      })
+      .describe('The confidence interval for the per-acre yield estimation.'),
+    marketPricePerKg: z.number().describe("The current market price per kilogram for the crop. THIS MUST BE THE EXACT NUMERIC 'price' VALUE AS RETURNED BY THE getMarketPrice TOOL."),
+    currency: z.string().describe("The currency for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'currency' AS RETURNED BY THE getMarketPrice TOOL. The tool is configured to return 'INR', so this field MUST be 'INR'."),
+    priceUnit: z.string().describe("The unit for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'unit' AS RETURNED BY THE getMarketPrice TOOL. The tool typically returns 'kg'."),
+    explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation. If a photo was provided, include visual analysis of the photo. If a weather forecast was retrieved, mention how it impacts the estimation. This explanation MUST reference the market price, currency (which will be INR), and unit as obtained directly from the getMarketPrice tool.'),
+    suggestions: z.array(z.string()).describe('Actionable suggestions to improve soil quality and crop yield for the selected crop. Provide at least 2-3 specific recommendations.'),
+});
+type AIOutput = z.infer<typeof AIOutputSchema>;
+
 
 const PromptInputSchema = z.object({
   cropType: z.string().describe('The type of crop to estimate yield for.'),
-  plotSize: z.number().describe('The size of the land plot in acres.'),
+  plotSize: z.number().describe('The size of the land plot in acres.'), // We still pass this for context
   location: z.string().optional(),
   photoDataUri: z.string().optional(),
   soilProperties: z.record(z.any()).describe('A key-value map of provided soil properties and their values.'),
@@ -90,19 +103,18 @@ export async function estimateCropYield(input: EstimateCropYieldInput): Promise<
 const prompt = ai.definePrompt({
   name: 'estimateCropYieldPrompt',
   input: {schema: PromptInputSchema},
-  output: {schema: EstimateCropYieldOutputSchema},
+  output: {schema: AIOutputSchema},
   tools: [getMarketPriceTool, getWeatherForecastTool],
-  prompt: `You are an expert agricultural consultant. Your primary task is to determine a crop yield *per acre* based on the provided data, and then *multiply* it by the plot size to get the final 'estimatedYield'. This calculation is mandatory.
+  prompt: `You are an expert agricultural consultant. Your primary task is to determine a crop yield *per acre* in kilograms based on the provided data.
 
 Here is your process:
 1.  Analyze all provided data: crop type, soil properties, location, and the optional photo.
 2.  If a 'location' is provided, use the 'getWeatherForecast' tool to find the upcoming weather forecast. Factor this into your analysis.
-3.  Based on all available information, determine a reasonable crop yield *per acre* in kilograms.
+3.  Based on all available information, determine a reasonable crop yield *for a single acre* in kilograms and a confidence interval for that estimate.
 4.  Use the 'getMarketPrice' tool to find the current market price for '{{{cropType}}}'. The tool will return the price, currency (always 'INR'), and unit.
 5.  In your final JSON output, you must populate all fields according to the schema.
-    -   'estimatedYield' MUST be your (per-acre yield) * ({{{plotSize}}}).
+    -   'yieldPerAcre' is your final determination for a single acre.
     -   'marketPricePerKg', 'currency', and 'priceUnit' MUST be the exact values from the tool.
-    -   'estimatedTotalValue' MUST be ('estimatedYield' * 'marketPricePerKg').
     -   Provide a helpful 'explanation' and actionable 'suggestions'.
 
   Crop Type: {{{cropType}}}
@@ -123,7 +135,6 @@ Here is your process:
     No additional soil properties provided.
   {{/each}}
 
-  Crucially, you must perform the calculation: (Yield per Acre) * (plotSize) = estimatedYield. The final JSON output must reflect this calculation.
   You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.
   `,
 });
@@ -161,8 +172,9 @@ const estimateCropYieldFlow = ai.defineFlow(
     }
 
     const llmResponse = await prompt(promptArgs);
+    const aiOutput = llmResponse.output;
 
-    if (!llmResponse.output) {
+    if (!aiOutput) {
       const rawText = llmResponse.text ?? "No raw text available from LLM.";
       const firstCandidate = llmResponse.candidates?.[0];
       const finishReason = firstCandidate?.finishReason ?? "Unknown";
@@ -191,6 +203,30 @@ const estimateCropYieldFlow = ai.defineFlow(
       
       throw new Error(userMessage);
     }
-    return llmResponse.output;
+    
+    // Perform calculations in code to ensure accuracy
+    const plotSize = rawInput.plotSize;
+    const estimatedYield = aiOutput.yieldPerAcre * plotSize;
+    const estimatedTotalValue = estimatedYield * aiOutput.marketPricePerKg;
+
+    // Scale confidence interval
+    const confidenceInterval = {
+        lower: aiOutput.confidenceIntervalPerAcre.lower * plotSize,
+        upper: aiOutput.confidenceIntervalPerAcre.upper * plotSize,
+    };
+
+    // Construct the final output object that the user will see
+    const finalOutput: EstimateCropYieldOutput = {
+        estimatedYield,
+        estimatedTotalValue,
+        confidenceInterval,
+        marketPricePerKg: aiOutput.marketPricePerKg,
+        currency: aiOutput.currency,
+        priceUnit: aiOutput.priceUnit,
+        explanation: aiOutput.explanation,
+        suggestions: aiOutput.suggestions,
+    };
+
+    return finalOutput;
   }
 );
