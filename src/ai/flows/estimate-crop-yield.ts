@@ -107,8 +107,6 @@ const prompt = ai.definePrompt({
   tools: [getMarketPriceTool, getWeatherForecastTool],
   prompt: `You are an expert agricultural consultant. Your primary task is to determine a crop yield *per acre* in kilograms based on the provided data.
 
-CRITICAL RULE: If the input for 'water' or 'sunlight' is 0, you MUST return a 'yieldPerAcre' of 0. Plants cannot grow without water or sunlight. The explanation should state this clearly.
-
 Here is your process:
 1.  Analyze all provided data: crop type, soil properties, location, and the optional photo.
 2.  If a 'location' is provided, use the 'getWeatherForecast' tool to find the upcoming weather forecast. Factor this into your analysis.
@@ -148,9 +146,13 @@ const estimateCropYieldFlow = ai.defineFlow(
     outputSchema: EstimateCropYieldOutputSchema,
   },
   async (rawInput: EstimateCropYieldInput): Promise<EstimateCropYieldOutput> => {
-    // Hard-coded check for essential resources.
-    if (rawInput.water === 0 || rawInput.sunlight === 0) {
-      const reason = rawInput.water === 0 ? 'water' : 'sunlight';
+    // Define minimum thresholds for essential resources.
+    const MIN_SUNLIGHT_HOURS = 2;
+    const MIN_WATER_PERCENT = 5;
+
+    // Hard-coded checks for essential resources.
+    if (rawInput.sunlight !== undefined && rawInput.sunlight < MIN_SUNLIGHT_HOURS) {
+      const reason = `the provided sunlight of ${rawInput.sunlight} hours/day is below the minimum required of ${MIN_SUNLIGHT_HOURS} hours/day for crop growth.`;
       return {
         estimatedYield: 0,
         confidenceInterval: { lower: 0, upper: 0 },
@@ -158,9 +160,23 @@ const estimateCropYieldFlow = ai.defineFlow(
         currency: 'INR',
         priceUnit: 'kg',
         estimatedTotalValue: 0,
-        explanation: `The estimated yield is zero because crops cannot grow without ${reason}.`,
-        suggestions: [`Provide a non-zero value for ${reason} to get a valid estimation.`],
+        explanation: `The estimated yield is zero because ${reason}`,
+        suggestions: [`Increase daily sunlight to at least ${MIN_SUNLIGHT_HOURS} hours to get a valid estimation.`],
       };
+    }
+    
+    if (rawInput.water !== undefined && rawInput.water < MIN_WATER_PERCENT) {
+        const reason = `the provided water content of ${rawInput.water}% is below the minimum required of ${MIN_WATER_PERCENT}% for crop growth.`;
+        return {
+          estimatedYield: 0,
+          confidenceInterval: { lower: 0, upper: 0 },
+          marketPricePerKg: 0,
+          currency: 'INR',
+          priceUnit: 'kg',
+          estimatedTotalValue: 0,
+          explanation: `The estimated yield is zero because ${reason}`,
+          suggestions: [`Increase water content to at least ${MIN_WATER_PERCENT}% to get a valid estimation.`],
+        };
     }
 
     const soilPropertiesForPrompt: Record<string, any> = {};
@@ -247,5 +263,3 @@ const estimateCropYieldFlow = ai.defineFlow(
     return finalOutput;
   }
 );
-
-    
