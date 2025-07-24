@@ -182,7 +182,7 @@ const estimateCropYieldFlow = ai.defineFlow(
     };
 
     if (rawInput.photoDataUri) {
-      promptArgs.photoDataUri = raw.photoDataUri;
+      promptArgs.photoDataUri = rawInput.photoDataUri;
     }
     if (rawInput.location) {
         promptArgs.location = rawInput.location;
@@ -214,7 +214,7 @@ const estimateCropYieldFlow = ai.defineFlow(
          userMessage = 'The AI model was unable to generate a response in the required format. It may have stopped prematurely or returned non-JSON text. Please check server logs.';
       } else if (['OTHER', 'UNKNOWN', 'UNSPECIFIED'].includes(finishReason)) {
         userMessage = 'An unexpected issue occurred with the AI model during generation. Please try again later or check server logs.';
-      } else if (rawText && (!rawText.trim().startsWith('{') || !raw.trim().endsWith('}'))) {
+      } else if (rawText && (!rawText.trim().startsWith('{') || !rawText.trim().endsWith('}'))) {
          userMessage = 'The AI model response was not in the expected JSON format. It might be incomplete or contain extra text. Please check server logs.';
       }
       

@@ -17,8 +17,9 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { History, ArrowLeft } from 'lucide-react';
+import { History, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default async function HistoryPage() {
   const { success, data, error } = await getEstimationHistory();
@@ -44,7 +45,13 @@ export default async function HistoryPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {error && <p className="text-destructive text-center">{error}</p>}
+          {error && (
+             <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Error Fetching History</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           {!error && data && data.length === 0 && (
             <p className="text-muted-foreground text-center py-8">
               You have no saved estimations yet. Go back to the estimator to create one.
@@ -85,3 +92,5 @@ export default async function HistoryPage() {
     </main>
   );
 }
+
+    

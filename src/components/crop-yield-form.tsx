@@ -288,7 +288,7 @@ export function CropYieldForm() {
                       name={prop.id as keyof CropYieldFormData}
                       render={({ field }) => {
                         const IconComponent = prop.icon;
-                        const numericValue = typeof field.value === 'string' ? parseFloat(field.value) : field.value as number;
+                        const numericValue = typeof field.value === 'string' ? parseFloat(field.value) : (field.value as number);
 
                         return (
                           <FormItem>
@@ -305,12 +305,11 @@ export function CropYieldForm() {
                                       step={prop.step}
                                       min={prop.min}
                                       max={prop.max}
-                                      {...field}
+                                      value={numericValue ?? ''}
                                       onChange={(e) => {
-                                        const val = parseFloat(e.target.value);
-                                        field.onChange(isNaN(val) ? undefined : val); 
+                                        const val = e.target.value;
+                                        field.onChange(val === '' ? undefined : parseFloat(val));
                                       }}
-                                      value={isNaN(numericValue) ? '' : numericValue}
                                       placeholder={(prop.defaultValue !== undefined) ? String(prop.defaultValue) : ''}
                                       className="w-24"
                                     />
@@ -319,10 +318,9 @@ export function CropYieldForm() {
                                     min={prop.min}
                                     max={prop.max}
                                     step={prop.step}
-                                    value={!isNaN(numericValue) ? [numericValue] : (prop.defaultValue !== undefined ? [prop.defaultValue as number] : [prop.min ?? 0])}
+                                    value={!isNaN(numericValue) && numericValue !== undefined ? [numericValue] : undefined}
                                     onValueChange={(value) => field.onChange(value[0])}
                                     className="flex-1"
-                                    disabled={isNaN(numericValue)} 
                                   />
                                 </div>
                               </>
@@ -429,3 +427,5 @@ export function CropYieldForm() {
     </div>
   );
 }
+
+    
