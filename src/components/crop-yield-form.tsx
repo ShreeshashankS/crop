@@ -228,7 +228,7 @@ export function CropYieldForm() {
                                         const val = parseFloat(e.target.value);
                                         field.onChange(isNaN(val) ? undefined : val); 
                                       }}
-                                      value={field.value === undefined || isNaN(field.value as number) ? '' : field.value}
+                                      value={isNaN(numericValue) ? '' : numericValue}
                                       placeholder={(prop.defaultValue !== undefined) ? String(prop.defaultValue) : ''}
                                       className="w-24"
                                     />
@@ -286,7 +286,7 @@ export function CropYieldForm() {
         <Card className="max-w-4xl mx-auto mt-8 shadow-xl">
           <CardHeader>
             <CardTitle className="text-2xl text-primary flex items-center">
-              {SelectedCropIcon && <SelectedCropIcon className="mr-3 h-8 w-8" />}
+              <SelectedCropIcon className="mr-3 h-8 w-8" />
               Estimated Yield & Value for {selectedCropLabel || 'Selected Crop'} ({currentPlotSize} acres)
             </CardTitle>
           </CardHeader>
