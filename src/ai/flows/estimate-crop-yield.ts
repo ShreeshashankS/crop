@@ -67,6 +67,7 @@ const EstimateCropYieldOutputSchema = z.object({
   ),
   estimatedTotalValue: z.number().describe('The total estimated market value of the crop yield, calculated as estimatedYield * marketPricePerKg, reflecting the INR currency.'),
   explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation. This explanation MUST reference the market price, currency (which will be INR), and unit as obtained directly from the getMarketPrice tool.'),
+  suggestions: z.array(z.string()).describe('Actionable suggestions to improve soil quality and crop yield for the selected crop. Provide at least 2-3 specific recommendations.'),
 });
 
 export type EstimateCropYieldOutput = z.infer<typeof EstimateCropYieldOutputSchema>;
@@ -99,7 +100,8 @@ const prompt = ai.definePrompt({
   3. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' (which is the tool's 'price' value). The total value should reflect the 'INR' currency.
   4. Provide a confidence interval for the yield estimation.
   5. Provide an explanation. This explanation MUST explicitly state the market price, currency (which will be INR), and unit exactly as obtained from the getMarketPrice tool.
-
+  6. As an expert agronomist, provide a list of 2-3 actionable 'suggestions' for improving the soil quality and crop yield based on the provided data. For example, if pH is low, suggest adding lime.
+  
   Crop Type: {{{cropType}}}
   Plot Size: {{{plotSize}}} acres
 
@@ -176,4 +178,3 @@ const estimateCropYieldFlow = ai.defineFlow(
     return llmResponse.output;
   }
 );
-

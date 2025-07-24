@@ -5,12 +5,10 @@ import type { EstimateCropYieldOutput } from '@/ai/flows/estimate-crop-yield';
 import { handleEstimateCropYield } from '@/lib/actions';
 import { DEFAULT_CROP_OPTIONS, SOIL_PROPERTIES_CONFIG, GENERAL_CROP_ICON, type SoilPropertyConfig } from '@/lib/constants';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, ShoppingCart, Info } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, Info, Lightbulb, Beaker } from 'lucide-react';
 import Image from 'next/image';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-// Graph imports removed as graph is no longer used
-// import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, ErrorBar } from 'recharts';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
@@ -195,7 +193,7 @@ export function CropYieldForm() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-xl text-primary">Soil & Environmental Properties</CardTitle>
+                  <CardTitle className="text-xl text-primary flex items-center"><Beaker className="mr-2 h-5 w-5" />Soil & Environmental Properties</CardTitle>
                   <CardDescription>Adjust the sliders or enter values directly for each property. These are optional.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
@@ -328,7 +326,19 @@ export function CropYieldForm() {
               <p className="text-muted-foreground italic bg-muted p-3 rounded-md">{estimationResult.explanation}</p>
             </div>
             
-            {/* Graph section removed */}
+            {estimationResult.suggestions && estimationResult.suggestions.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-lg flex items-center mb-2">
+                  <Lightbulb className="mr-2 h-5 w-5 text-amber-500" />
+                  Soil Improvement Suggestions
+                </h3>
+                <ul className="space-y-2 list-disc list-inside bg-muted p-4 rounded-md text-muted-foreground">
+                  {estimationResult.suggestions.map((suggestion, index) => (
+                    <li key={index}>{suggestion}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
