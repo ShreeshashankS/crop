@@ -107,6 +107,8 @@ const prompt = ai.definePrompt({
   tools: [getMarketPriceTool, getWeatherForecastTool],
   prompt: `You are an expert agricultural consultant. Your primary task is to determine a crop yield *per acre* in kilograms based on the provided data.
 
+CRITICAL RULE: If the input for 'water' or 'sunlight' is 0, you MUST return a 'yieldPerAcre' of 0. Plants cannot grow without water or sunlight. The explanation should state this clearly.
+
 Here is your process:
 1.  Analyze all provided data: crop type, soil properties, location, and the optional photo.
 2.  If a 'location' is provided, use the 'getWeatherForecast' tool to find the upcoming weather forecast. Factor this into your analysis.
@@ -146,6 +148,21 @@ const estimateCropYieldFlow = ai.defineFlow(
     outputSchema: EstimateCropYieldOutputSchema,
   },
   async (rawInput: EstimateCropYieldInput): Promise<EstimateCropYieldOutput> => {
+    // Hard-coded check for essential resources.
+    if (rawInput.water === 0 || rawInput.sunlight === 0) {
+      const reason = rawInput.water === 0 ? 'water' : 'sunlight';
+      return {
+        estimatedYield: 0,
+        confidenceInterval: { lower: 0, upper: 0 },
+        marketPricePerKg: 0,
+        currency: 'INR',
+        priceUnit: 'kg',
+        estimatedTotalValue: 0,
+        explanation: `The estimated yield is zero because crops cannot grow without ${reason}.`,
+        suggestions: [`Provide a non-zero value for ${reason} to get a valid estimation.`],
+      };
+    }
+
     const soilPropertiesForPrompt: Record<string, any> = {};
     for (const key in rawInput) {
       if (Object.prototype.hasOwnProperty.call(rawInput, key)) {
@@ -165,7 +182,7 @@ const estimateCropYieldFlow = ai.defineFlow(
     };
 
     if (rawInput.photoDataUri) {
-      promptArgs.photoDataUri = rawInput.photoDataUri;
+      promptArgs.photoDataUri = raw.photoDataUri;
     }
     if (rawInput.location) {
         promptArgs.location = rawInput.location;
@@ -197,7 +214,7 @@ const estimateCropYieldFlow = ai.defineFlow(
          userMessage = 'The AI model was unable to generate a response in the required format. It may have stopped prematurely or returned non-JSON text. Please check server logs.';
       } else if (['OTHER', 'UNKNOWN', 'UNSPECIFIED'].includes(finishReason)) {
         userMessage = 'An unexpected issue occurred with the AI model during generation. Please try again later or check server logs.';
-      } else if (rawText && (!rawText.trim().startsWith('{') || !rawText.trim().endsWith('}'))) {
+      } else if (rawText && (!rawText.trim().startsWith('{') || !raw.trim().endsWith('}'))) {
          userMessage = 'The AI model response was not in the expected JSON format. It might be incomplete or contain extra text. Please check server logs.';
       }
       
@@ -230,3 +247,5 @@ const estimateCropYieldFlow = ai.defineFlow(
     return finalOutput;
   }
 );
+
+    
