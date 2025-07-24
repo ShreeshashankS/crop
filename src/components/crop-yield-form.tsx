@@ -5,7 +5,7 @@ import type { EstimateCropYieldOutput } from '@/ai/flows/estimate-crop-yield';
 import { handleEstimateCropYield } from '@/lib/actions';
 import { DEFAULT_CROP_OPTIONS, SOIL_PROPERTIES_CONFIG, GENERAL_CROP_ICON, type SoilPropertyConfig } from '@/lib/constants';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, Info, Lightbulb, Beaker, Image as ImageIcon, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, Info, Lightbulb, Beaker, Image as ImageIcon, X, MapPin } from 'lucide-react';
 import Image from 'next/image';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 const formSchemaObject = {
   cropType: z.string().min(1, 'Crop type is required.'),
   plotSize: z.coerce.number().min(0.01, "Plot size must be at least 0.01 acres."),
+  location: z.string().optional(),
   photoDataUri: z.string().optional(),
   ...Object.fromEntries(
     SOIL_PROPERTIES_CONFIG.map((prop) => [
@@ -51,6 +52,7 @@ export function CropYieldForm() {
     defaultValues: {
       cropType: '',
       plotSize: 2, // Default plot size
+      location: '',
       photoDataUri: undefined,
       ...Object.fromEntries(SOIL_PROPERTIES_CONFIG.map((prop) => [prop.id, prop.defaultValue])),
     },
@@ -217,6 +219,26 @@ export function CropYieldForm() {
                   )}
                 />
               </div>
+
+                <FormField
+                  control={form.control}
+                  name="location"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-semibold text-lg mb-1 flex items-center">
+                        <MapPin className="mr-2 h-5 w-5 text-primary" />
+                        Location (Optional)
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Fresno, California" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Provide a location for a more accurate weather-based estimation.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
               <Card>
                  <CardHeader>

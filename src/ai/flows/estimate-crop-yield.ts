@@ -12,11 +12,13 @@
 
 import {ai} from '@/ai/genkit';
 import {getMarketPriceTool} from '@/ai/tools/get-market-price-tool';
+import {getWeatherForecastTool} from '@/ai/tools/get-weather-forecast-tool';
 import {z} from 'genkit';
 
 const EstimateCropYieldInputSchema = z.object({
   cropType: z.string().describe('The type of crop to estimate yield for.'),
   plotSize: z.number().describe('The size of the land plot in acres.'),
+  location: z.string().describe('The geographical location (e.g., city, region) of the plot for weather forecasting.').optional(),
   photoDataUri: z.string().describe("An optional photo of the crop or soil, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'.").optional(),
   magnesium: z.number().describe('Magnesium content in the soil (ppm)').optional(),
   sodium: z.number().describe('Sodium content in the soil (ppm)').optional(),
@@ -67,7 +69,7 @@ const EstimateCropYieldOutputSchema = z.object({
     "The unit for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'unit' AS RETURNED BY THE getMarketPrice TOOL. The tool typically returns 'kg'."
   ),
   estimatedTotalValue: z.number().describe('The total estimated market value of the crop yield, calculated as estimatedYield * marketPricePerKg, reflecting the INR currency.'),
-  explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation. If a photo was provided, include visual analysis of the photo in this explanation (e.g., color of soil, health of leaves). This explanation MUST reference the market price, currency (which will be INR), and unit as obtained directly from the getMarketPrice tool.'),
+  explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation. If a photo was provided, include visual analysis of the photo. If a weather forecast was retrieved, mention how it impacts the estimation. This explanation MUST reference the market price, currency (which will be INR), and unit as obtained directly from the getMarketPrice tool.'),
   suggestions: z.array(z.string()).describe('Actionable suggestions to improve soil quality and crop yield for the selected crop. Provide at least 2-3 specific recommendations.'),
 });
 
@@ -76,6 +78,7 @@ export type EstimateCropYieldOutput = z.infer<typeof EstimateCropYieldOutputSche
 const PromptInputSchema = z.object({
   cropType: z.string().describe('The type of crop to estimate yield for.'),
   plotSize: z.number().describe('The size of the land plot in acres.'),
+  location: z.string().optional(),
   photoDataUri: z.string().optional(),
   soilProperties: z.record(z.any()).describe('A key-value map of provided soil properties and their values.'),
 });
@@ -88,25 +91,29 @@ const prompt = ai.definePrompt({
   name: 'estimateCropYieldPrompt',
   input: {schema: PromptInputSchema},
   output: {schema: EstimateCropYieldOutputSchema},
-  tools: [getMarketPriceTool],
+  tools: [getMarketPriceTool, getWeatherForecastTool],
   prompt: `You are an expert agricultural consultant and market analyst.
-  Based on the provided crop type, plot size, soil properties, and the optional photo:
-  1. If a photo is provided, analyze it for visual cues about soil quality, plant health, discoloration, pests, etc. Incorporate this visual analysis into your final 'explanation'.
-  2. Estimate the total crop yield in kilograms.
-  3. Use the 'getMarketPrice' tool to find the current market price for the specified '{{{cropType}}}'.
+  Based on the provided crop type, plot size, soil properties, location, and the optional photo:
+  1. If a 'location' is provided, use the 'getWeatherForecast' tool to find the upcoming weather forecast. Factor this forecast into your estimation and mention the weather in your final 'explanation'.
+  2. If a photo is provided, analyze it for visual cues about soil quality, plant health, discoloration, pests, etc. Incorporate this visual analysis into your final 'explanation'.
+  3. Estimate the total crop yield in kilograms.
+  4. Use the 'getMarketPrice' tool to find the current market price for the specified '{{{cropType}}}'.
      The tool will return an object with 'price' (numeric), 'currency' (string, e.g., "INR"), and 'unit' (string, e.g., "kg") fields.
      IMPORTANT: The getMarketPrice tool is configured for the Indian market and will ALWAYS return the currency as 'INR'.
      When constructing your final JSON output:
        - The 'marketPricePerKg' field MUST be the exact numeric value from the tool's 'price' output.
        - The 'currency' field MUST be the exact string value from the tool's 'currency' output. Since the tool returns 'INR', this field MUST be 'INR'.
        - The 'priceUnit' field MUST be the exact string value from the tool's 'unit' output.
-  4. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' (which is the tool's 'price' value). The total value should reflect the 'INR' currency.
-  5. Provide a confidence interval for the yield estimation.
-  6. Provide an explanation. This explanation MUST explicitly state the market price, currency (which will be INR), and unit exactly as obtained from the getMarketPrice tool. If a photo was analyzed, mention it here.
-  7. As an expert agronomist, provide a list of 2-3 actionable 'suggestions' for improving the soil quality and crop yield based on the provided data. For example, if pH is low, suggest adding lime.
+  5. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' (which is the tool's 'price' value). The total value should reflect the 'INR' currency.
+  6. Provide a confidence interval for the yield estimation.
+  7. Provide an explanation. This explanation MUST explicitly state the market price, currency (which will be INR), and unit exactly as obtained from the getMarketPrice tool. If a photo was analyzed or weather was fetched, mention it here.
+  8. As an expert agronomist, provide a list of 2-3 actionable 'suggestions' for improving the soil quality and crop yield based on the provided data.
   
   Crop Type: {{{cropType}}}
   Plot Size: {{{plotSize}}} acres
+  {{#if location}}
+  Location: {{{location}}}
+  {{/if}}
 
   {{#if photoDataUri}}
   Photo for Analysis:
@@ -137,7 +144,7 @@ const estimateCropYieldFlow = ai.defineFlow(
     const soilPropertiesForPrompt: Record<string, any> = {};
     for (const key in rawInput) {
       if (Object.prototype.hasOwnProperty.call(rawInput, key)) {
-        if (key !== 'cropType' && key !== 'plotSize' && key !== 'photoDataUri') {
+        if (key !== 'cropType' && key !== 'plotSize' && key !== 'photoDataUri' && key !== 'location') {
           const value = rawInput[key as keyof EstimateCropYieldInput];
           if (value !== undefined && value !== null) {
             soilPropertiesForPrompt[key] = value;
@@ -154,6 +161,9 @@ const estimateCropYieldFlow = ai.defineFlow(
 
     if (rawInput.photoDataUri) {
       promptArgs.photoDataUri = rawInput.photoDataUri;
+    }
+    if (rawInput.location) {
+        promptArgs.location = rawInput.location;
     }
 
     const llmResponse = await prompt(promptArgs);
