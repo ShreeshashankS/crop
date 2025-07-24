@@ -9,6 +9,7 @@ import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'fi
 const EstimateCropYieldInputSchema = z.object({
   cropType: z.string().min(1, "Crop type is required."),
   plotSize: z.coerce.number().min(0.01, "Plot size must be at least 0.01 acres."),
+  photoDataUri: z.string().optional(),
   magnesium: z.coerce.number().optional(),
   sodium: z.coerce.number().optional(),
   nitrogen: z.coerce.number().optional(),

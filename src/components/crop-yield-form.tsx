@@ -5,7 +5,7 @@ import type { EstimateCropYieldOutput } from '@/ai/flows/estimate-crop-yield';
 import { handleEstimateCropYield } from '@/lib/actions';
 import { DEFAULT_CROP_OPTIONS, SOIL_PROPERTIES_CONFIG, GENERAL_CROP_ICON, type SoilPropertyConfig } from '@/lib/constants';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, Info, Lightbulb, Beaker } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, Info, Lightbulb, Beaker, Image as ImageIcon, X } from 'lucide-react';
 import Image from 'next/image';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 const formSchemaObject = {
   cropType: z.string().min(1, 'Crop type is required.'),
   plotSize: z.coerce.number().min(0.01, "Plot size must be at least 0.01 acres."),
+  photoDataUri: z.string().optional(),
   ...Object.fromEntries(
     SOIL_PROPERTIES_CONFIG.map((prop) => [
       prop.id,
@@ -42,6 +43,7 @@ export function CropYieldForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [estimationResult, setEstimationResult] = useState<EstimateCropYieldOutput | null>(null);
   const [comboboxOpen, setComboboxOpen] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const { toast } = useToast();
 
   const form = useForm<CropYieldFormData>({
@@ -49,9 +51,34 @@ export function CropYieldForm() {
     defaultValues: {
       cropType: '',
       plotSize: 2, // Default plot size
+      photoDataUri: undefined,
       ...Object.fromEntries(SOIL_PROPERTIES_CONFIG.map((prop) => [prop.id, prop.defaultValue])),
     },
   });
+  
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUri = reader.result as string;
+        setImagePreview(dataUri);
+        form.setValue('photoDataUri', dataUri);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearImage = () => {
+    setImagePreview(null);
+    form.setValue('photoDataUri', undefined);
+    // Reset the file input value
+    const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  };
+
 
   async function onSubmit(data: CropYieldFormData) {
     setIsLoading(true);
@@ -190,6 +217,41 @@ export function CropYieldForm() {
                   )}
                 />
               </div>
+
+              <Card>
+                 <CardHeader>
+                    <CardTitle className="text-xl text-primary flex items-center"><ImageIcon className="mr-2 h-5 w-5" />Visual Analysis (Optional)</CardTitle>
+                    <CardDescription>Upload a photo of your soil or crop for a more detailed analysis.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <FormField
+                      control={form.control}
+                      name="photoDataUri"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input id="photo-upload" type="file" accept="image/*" onChange={handleImageChange} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"/>
+                          </FormControl>
+                          {imagePreview && (
+                            <div className="mt-4 relative w-48 h-48 border rounded-lg p-2">
+                               <Image src={imagePreview} alt="Image preview" layout="fill" objectFit="cover" className="rounded-md" />
+                               <Button
+                                 type="button"
+                                 variant="destructive"
+                                 size="icon"
+                                 className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                                 onClick={clearImage}
+                               >
+                                 <X className="h-4 w-4" />
+                               </Button>
+                            </div>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+              </Card>
 
               <Card>
                 <CardHeader>
