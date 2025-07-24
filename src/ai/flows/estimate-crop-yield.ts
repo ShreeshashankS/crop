@@ -96,18 +96,19 @@ const prompt = ai.definePrompt({
   Based on the provided crop type, plot size, soil properties, location, and the optional photo:
   1. If a 'location' is provided, use the 'getWeatherForecast' tool to find the upcoming weather forecast. Factor this forecast into your estimation and mention the weather in your final 'explanation'.
   2. If a photo is provided, analyze it for visual cues about soil quality, plant health, discoloration, pests, etc. Incorporate this visual analysis into your final 'explanation'.
-  3. Estimate the total crop yield in kilograms.
-  4. Use the 'getMarketPrice' tool to find the current market price for the specified '{{{cropType}}}'.
+  3. First, estimate the crop yield *per acre* in kilograms based on the provided data.
+  4. Then, calculate the 'estimatedYield' field by multiplying your per-acre estimate by the 'plotSize' ({{{plotSize}}} acres). The final 'estimatedYield' must be the total yield for the entire plot.
+  5. Use the 'getMarketPrice' tool to find the current market price for the specified '{{{cropType}}}'.
      The tool will return an object with 'price' (numeric), 'currency' (string, e.g., "INR"), and 'unit' (string, e.g., "kg") fields.
      IMPORTANT: The getMarketPrice tool is configured for the Indian market and will ALWAYS return the currency as 'INR'.
      When constructing your final JSON output:
        - The 'marketPricePerKg' field MUST be the exact numeric value from the tool's 'price' output.
        - The 'currency' field MUST be the exact string value from the tool's 'currency' output. Since the tool returns 'INR', this field MUST be 'INR'.
        - The 'priceUnit' field MUST be the exact string value from the tool's 'unit' output.
-  5. Calculate the 'estimatedTotalValue' by multiplying the 'estimatedYield' (in kg) by the 'marketPricePerKg' (which is the tool's 'price' value). The total value should reflect the 'INR' currency.
-  6. Provide a confidence interval for the yield estimation.
-  7. Provide an explanation. This explanation MUST explicitly state the market price, currency (which will be INR), and unit exactly as obtained from the getMarketPrice tool. If a photo was analyzed or weather was fetched, mention it here.
-  8. As an expert agronomist, provide a list of 2-3 actionable 'suggestions' for improving the soil quality and crop yield based on the provided data.
+  6. Calculate the 'estimatedTotalValue' by multiplying the final 'estimatedYield' (in kg) by the 'marketPricePerKg' (which is the tool's 'price' value). The total value should reflect the 'INR' currency.
+  7. Provide a confidence interval for the total yield estimation.
+  8. Provide an explanation. This explanation MUST explicitly state the market price, currency (which will be INR), and unit exactly as obtained from the getMarketPrice tool. If a photo was analyzed or weather was fetched, mention it here.
+  9. As an expert agronomist, provide a list of 2-3 actionable 'suggestions' for improving the soil quality and crop yield based on the provided data.
   
   Crop Type: {{{cropType}}}
   Plot Size: {{{plotSize}}} acres
