@@ -6,7 +6,7 @@
  * and also estimates the total market value using a market price tool.
  *
  * - estimateCropYield - A function that estimates crop yield and value.
- * - EstimateCropYieldInput - The input type for the estimateCropYield function.
+ * - EstimateCropYieldInput - The input type for the estimateCropyield function.
  * - EstimateCropYieldOutput - The return type for the estimateCropYield function.
  */
 
@@ -54,7 +54,7 @@ const EstimateCropYieldInputSchema = z.object({
 export type EstimateCropYieldInput = z.infer<typeof EstimateCropYieldInputSchema>;
 
 const EstimateCropYieldOutputSchema = z.object({
-  estimatedYield: z.number().describe('The total estimated crop yield in kilograms for the specified plot size.'),
+  estimatedYield: z.number().describe('The total estimated crop yield in kilograms for the specified plot size. This MUST be the result of (yield per acre) * plotSize.'),
   confidenceInterval: z
     .object({
       lower: z.number().describe('The lower bound of the confidence interval for yield.'),
@@ -92,24 +92,19 @@ const prompt = ai.definePrompt({
   input: {schema: PromptInputSchema},
   output: {schema: EstimateCropYieldOutputSchema},
   tools: [getMarketPriceTool, getWeatherForecastTool],
-  prompt: `You are an expert agricultural consultant and market analyst.
-  Based on the provided crop type, plot size, soil properties, location, and the optional photo:
-  1. If a 'location' is provided, use the 'getWeatherForecast' tool to find the upcoming weather forecast. Factor this forecast into your estimation and mention the weather in your final 'explanation'.
-  2. If a photo is provided, analyze it for visual cues about soil quality, plant health, discoloration, pests, etc. Incorporate this visual analysis into your final 'explanation'.
-  3. First, estimate the crop yield *per acre* in kilograms based on the provided data.
-  4. Then, calculate the 'estimatedYield' field by multiplying your per-acre estimate by the 'plotSize' ({{{plotSize}}} acres). The final 'estimatedYield' must be the total yield for the entire plot.
-  5. Use the 'getMarketPrice' tool to find the current market price for the specified '{{{cropType}}}'.
-     The tool will return an object with 'price' (numeric), 'currency' (string, e.g., "INR"), and 'unit' (string, e.g., "kg") fields.
-     IMPORTANT: The getMarketPrice tool is configured for the Indian market and will ALWAYS return the currency as 'INR'.
-     When constructing your final JSON output:
-       - The 'marketPricePerKg' field MUST be the exact numeric value from the tool's 'price' output.
-       - The 'currency' field MUST be the exact string value from the tool's 'currency' output. Since the tool returns 'INR', this field MUST be 'INR'.
-       - The 'priceUnit' field MUST be the exact string value from the tool's 'unit' output.
-  6. Calculate the 'estimatedTotalValue' by multiplying the final 'estimatedYield' (in kg) by the 'marketPricePerKg' (which is the tool's 'price' value). The total value should reflect the 'INR' currency.
-  7. Provide a confidence interval for the total yield estimation.
-  8. Provide an explanation. This explanation MUST explicitly state the market price, currency (which will be INR), and unit exactly as obtained from the getMarketPrice tool. If a photo was analyzed or weather was fetched, mention it here.
-  9. As an expert agronomist, provide a list of 2-3 actionable 'suggestions' for improving the soil quality and crop yield based on the provided data.
-  
+  prompt: `You are an expert agricultural consultant. Your primary task is to determine a crop yield *per acre* based on the provided data, and then *multiply* it by the plot size to get the final 'estimatedYield'. This calculation is mandatory.
+
+Here is your process:
+1.  Analyze all provided data: crop type, soil properties, location, and the optional photo.
+2.  If a 'location' is provided, use the 'getWeatherForecast' tool to find the upcoming weather forecast. Factor this into your analysis.
+3.  Based on all available information, determine a reasonable crop yield *per acre* in kilograms.
+4.  Use the 'getMarketPrice' tool to find the current market price for '{{{cropType}}}'. The tool will return the price, currency (always 'INR'), and unit.
+5.  In your final JSON output, you must populate all fields according to the schema.
+    -   'estimatedYield' MUST be your (per-acre yield) * ({{{plotSize}}}).
+    -   'marketPricePerKg', 'currency', and 'priceUnit' MUST be the exact values from the tool.
+    -   'estimatedTotalValue' MUST be ('estimatedYield' * 'marketPricePerKg').
+    -   Provide a helpful 'explanation' and actionable 'suggestions'.
+
   Crop Type: {{{cropType}}}
   Plot Size: {{{plotSize}}} acres
   {{#if location}}
@@ -128,9 +123,7 @@ const prompt = ai.definePrompt({
     No additional soil properties provided.
   {{/each}}
 
-  Please provide all fields as defined in the output schema.
-  Ensure the 'currency' field in your output is 'INR', as per the tool's output.
-  The estimatedTotalValue must be calculated using the 'price' from the tool and reflect 'INR'.
+  Crucially, you must perform the calculation: (Yield per Acre) * (plotSize) = estimatedYield. The final JSON output must reflect this calculation.
   You must output ONLY the valid JSON object defined in the schema, with no additional text or explanations outside of the JSON structure.
   `,
 });
