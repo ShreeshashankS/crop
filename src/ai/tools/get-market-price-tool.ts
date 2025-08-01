@@ -9,7 +9,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const MarketPriceOutputSchema = z.object({
+const MarketPriceOutputSchema = z.object({
   price: z.number().describe('The market price of the crop.'),
   currency: z.string().describe('The currency of the price (e.g., INR, USD, EUR).'),
   unit: z.string().describe('The unit for the price (e.g., kg, bushel, ton).'),
@@ -58,4 +58,3 @@ export const getMarketPriceTool = ai.defineTool(
     };
   }
 );
-
