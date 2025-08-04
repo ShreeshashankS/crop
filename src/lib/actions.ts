@@ -2,6 +2,7 @@
 'use server';
 
 import { estimateCropYield, type EstimateCropYieldInput, type EstimateCropYieldOutput } from '@/ai/flows/estimate-crop-yield';
+import { suggestSuitableCrop, type SuggestCropInput, type SuggestCropOutput } from '@/ai/flows/suggest-suitable-crop';
 import { z } from 'zod';
 import { db } from '@/lib/firebase/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
@@ -64,6 +65,27 @@ export async function handleEstimateCropYield(
       return { success: false, error: error.message };
     }
     return { success: false, error: 'Failed to estimate crop yield. Please try again.' };
+  }
+}
+
+export async function handleSuggestCrop(
+  data: SuggestCropInput
+): Promise<{ success: boolean; data?: SuggestCropOutput; error?: string }> {
+  try {
+    const cleanedData = Object.fromEntries(
+      Object.entries(data).filter(([key, v]) => 
+        v !== undefined && v !== '' && v !== null && !['cropType', 'plotSize', 'photoDataUri'].includes(key)
+      )
+    ) as SuggestCropInput;
+
+    const result = await suggestSuitableCrop(cleanedData);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Error in handleSuggestCrop:', error);
+    if (error instanceof Error && error.message) {
+      return { success: false, error: error.message };
+    }
+    return { success: false, error: 'Failed to suggest crops. Please try again.' };
   }
 }
 

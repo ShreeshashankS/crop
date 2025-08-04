@@ -2,10 +2,11 @@
 'use client';
 
 import type { EstimateCropYieldOutput } from '@/ai/flows/estimate-crop-yield';
-import { handleEstimateCropYield } from '@/lib/actions';
+import type { SuggestCropOutput } from '@/ai/flows/suggest-suitable-crop';
+import { handleEstimateCropYield, handleSuggestCrop } from '@/lib/actions';
 import { DEFAULT_CROP_OPTIONS, SOIL_PROPERTIES_CONFIG, GENERAL_CROP_ICON, type SoilPropertyConfig } from '@/lib/constants';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, Info, Lightbulb, Beaker, Image as ImageIcon, X, MapPin } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, Info, Lightbulb, Beaker, Image as ImageIcon, X, MapPin, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -19,8 +20,10 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Separator } from './ui/separator';
 
 const formSchemaObject = {
   cropType: z.string().min(1, 'Crop type is required.'),
@@ -42,9 +45,12 @@ type CropYieldFormData = z.infer<typeof FormSchema>;
 
 export function CropYieldForm() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
   const [estimationResult, setEstimationResult] = useState<EstimateCropYieldOutput | null>(null);
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestCropOutput | null>(null);
+  const [isSuggestionDialogOpen, setIsSuggestionDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<CropYieldFormData>({
@@ -81,6 +87,23 @@ export function CropYieldForm() {
     }
   };
 
+  async function onSuggest() {
+    setIsSuggesting(true);
+    const formData = form.getValues();
+    const result = await handleSuggestCrop(formData);
+    setIsSuggesting(false);
+
+    if (result.success && result.data) {
+      setSuggestions(result.data);
+      setIsSuggestionDialogOpen(true);
+    } else {
+      toast({
+        title: 'Suggestion Failed',
+        description: result.error || 'Could not suggest crops for the given conditions.',
+        variant: 'destructive',
+      });
+    }
+  }
 
   async function onSubmit(data: CropYieldFormData) {
     setIsLoading(true);
@@ -342,7 +365,20 @@ export function CropYieldForm() {
                 </CardContent>
               </Card>
 
-              <CardFooter className="flex justify-center pt-6">
+              <CardFooter className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-6">
+                <Button type="button" variant="outline" onClick={onSuggest} disabled={isSuggesting} size="lg" className="w-full md:w-auto text-lg px-8 py-6">
+                  {isSuggesting ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Thinking...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-5 w-5" />
+                      Suggest Suitable Crop
+                    </>
+                  )}
+                </Button>
                 <Button type="submit" disabled={isLoading} size="lg" className="w-full md:w-auto text-lg px-8 py-6">
                   {isLoading ? (
                     <>
@@ -424,6 +460,50 @@ export function CropYieldForm() {
           </CardContent>
         </Card>
       )}
+
+       <Dialog open={isSuggestionDialogOpen} onOpenChange={setIsSuggestionDialogOpen}>
+        <DialogContent className="sm:max-w-[625px]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl flex items-center">
+              <Sparkles className="mr-2 h-6 w-6 text-primary" />
+              Suitable Crop Suggestions
+            </DialogTitle>
+            <DialogDescription>
+              Based on your soil and environmental data, here are a few recommended crops. Click one to use it in the estimator.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
+            {suggestions?.suggestions.map((suggestion, index) => (
+              <div key={index}>
+                <div className="flex justify-between items-start gap-4">
+                  <div>
+                    <h4 className="font-semibold text-lg">{suggestion.cropName}</h4>
+                    <p className="text-sm text-muted-foreground">{suggestion.reasoning}</p>
+                  </div>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => {
+                      form.setValue('cropType', suggestion.cropName);
+                      setIsSuggestionDialogOpen(false);
+                      toast({
+                        title: 'Crop Type Updated!',
+                        description: `${suggestion.cropName} has been selected.`,
+                      });
+                    }}
+                  >
+                    Select
+                  </Button>
+                </div>
+                {index < suggestions.suggestions.length - 1 && <Separator className="mt-4" />}
+              </div>
+            ))}
+            {(!suggestions || suggestions.suggestions.length === 0) && (
+              <p className="text-center text-muted-foreground">The AI could not find any suitable crops for the provided conditions.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
