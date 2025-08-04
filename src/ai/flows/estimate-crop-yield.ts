@@ -12,13 +12,11 @@
 
 import {ai} from '@/ai/genkit';
 import {getMarketPriceTool} from '@/ai/tools/get-market-price-tool';
-import {getWeatherForecastTool} from '@/ai/tools/get-weather-forecast-tool';
 import {z} from 'genkit';
 
 const EstimateCropYieldInputSchema = z.object({
   cropType: z.string().describe('The type of crop to estimate yield for.'),
   plotSize: z.number().describe('The size of the land plot in acres.'),
-  location: z.string().describe('The geographical location (e.g., city, region) of the plot for weather forecasting.').optional(),
   photoDataUri: z.string().describe("An optional photo of the crop or soil, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'.").optional(),
   magnesium: z.number().describe('Magnesium content in the soil (ppm)').optional(),
   sodium: z.number().describe('Sodium content in the soil (ppm)').optional(),
@@ -82,7 +80,7 @@ const AIOutputSchema = z.object({
     marketPricePerKg: z.number().describe("The current market price per kilogram for the crop. THIS MUST BE THE EXACT NUMERIC 'price' VALUE AS RETURNED BY THE getMarketPrice TOOL."),
     currency: z.string().describe("The currency for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'currency' AS RETURNED BY THE getMarketPrice TOOL. The tool is configured to return 'INR', so this field MUST be 'INR'."),
     priceUnit: z.string().describe("The unit for the market price. THIS MUST BE THE EXACT STRING VALUE FOR 'unit' AS RETURNED BY THE getMarketPrice TOOL. The tool typically returns 'kg'."),
-    explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation. If a photo was provided, include visual analysis of the photo. If a weather forecast was retrieved, mention how it impacts the estimation. This explanation MUST reference the market price, currency (which will be INR), and unit as obtained directly from the getMarketPrice tool.'),
+    explanation: z.string().describe('An explanation of the factors influencing the yield and value estimation. The context is for India. If a photo was provided, include visual analysis of the photo. This explanation MUST reference the market price, currency (which will be INR), and unit as obtained directly from the getMarketPrice tool.'),
     suggestions: z.array(z.string()).describe('Actionable suggestions to improve soil quality and crop yield for the selected crop. Provide at least 2-3 specific recommendations.'),
 });
 type AIOutput = z.infer<typeof AIOutputSchema>;
@@ -91,7 +89,6 @@ type AIOutput = z.infer<typeof AIOutputSchema>;
 const PromptInputSchema = z.object({
   cropType: z.string().describe('The type of crop to estimate yield for.'),
   plotSize: z.number().describe('The size of the land plot in acres.'), // We still pass this for context
-  location: z.string().optional(),
   photoDataUri: z.string().optional(),
   soilProperties: z.record(z.any()).describe('A key-value map of provided soil properties and their values.'),
 });
@@ -104,24 +101,21 @@ const prompt = ai.definePrompt({
   name: 'estimateCropYieldPrompt',
   input: {schema: PromptInputSchema},
   output: {schema: AIOutputSchema},
-  tools: [getMarketPriceTool, getWeatherForecastTool],
-  prompt: `You are an expert agricultural consultant. Your primary task is to determine a crop yield *per acre* in kilograms based on the provided data.
+  tools: [getMarketPriceTool],
+  prompt: `You are an expert agricultural consultant specializing in Indian agriculture. Your primary task is to determine a crop yield *per acre* in kilograms based on the provided data.
 
 Here is your process:
-1.  Analyze all provided data: crop type, soil properties, location, and the optional photo.
-2.  If a 'location' is provided, use the 'getWeatherForecast' tool to find the upcoming weather forecast. Factor this into your analysis.
-3.  Based on all available information, determine a reasonable crop yield *for a single acre* in kilograms and a confidence interval for that estimate.
-4.  Use the 'getMarketPrice' tool to find the current market price for '{{{cropType}}}'. The tool will return the price, currency (always 'INR'), and unit.
-5.  In your final JSON output, you must populate all fields according to the schema.
+1.  Analyze all provided data: crop type, soil properties, and the optional photo. The context is for farming in India.
+2.  Based on all available information, determine a reasonable crop yield *for a single acre* in kilograms and a confidence interval for that estimate.
+3.  Use the 'getMarketPrice' tool to find the current market price for '{{{cropType}}}'. The tool will return the price, currency (always 'INR'), and unit.
+4.  In your final JSON output, you must populate all fields according to the schema.
     -   'yieldPerAcre' is your final determination for a single acre.
     -   'marketPricePerKg', 'currency', and 'priceUnit' MUST be the exact values from the tool.
     -   Provide a helpful 'explanation' and actionable 'suggestions'.
 
   Crop Type: {{{cropType}}}
   Plot Size: {{{plotSize}}} acres
-  {{#if location}}
-  Location: {{{location}}}
-  {{/if}}
+  Location Context: India
 
   {{#if photoDataUri}}
   Photo for Analysis:
@@ -182,7 +176,7 @@ const estimateCropYieldFlow = ai.defineFlow(
     const soilPropertiesForPrompt: Record<string, any> = {};
     for (const key in rawInput) {
       if (Object.prototype.hasOwnProperty.call(rawInput, key)) {
-        if (key !== 'cropType' && key !== 'plotSize' && key !== 'photoDataUri' && key !== 'location') {
+        if (key !== 'cropType' && key !== 'plotSize' && key !== 'photoDataUri') {
           const value = rawInput[key as keyof EstimateCropYieldInput];
           if (value !== undefined && value !== null) {
             soilPropertiesForPrompt[key] = value;
@@ -200,10 +194,7 @@ const estimateCropYieldFlow = ai.defineFlow(
     if (rawInput.photoDataUri) {
       promptArgs.photoDataUri = rawInput.photoDataUri;
     }
-    if (rawInput.location) {
-        promptArgs.location = rawInput.location;
-    }
-
+    
     const llmResponse = await prompt(promptArgs);
     const aiOutput = llmResponse.output;
 

@@ -6,7 +6,7 @@ import type { SuggestCropOutput } from '@/ai/flows/suggest-suitable-crop';
 import { handleEstimateCropYield, handleSuggestCrop } from '@/lib/actions';
 import { DEFAULT_CROP_OPTIONS, SOIL_PROPERTIES_CONFIG, GENERAL_CROP_ICON, type SoilPropertyConfig } from '@/lib/constants';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, Info, Lightbulb, Beaker, Image as ImageIcon, X, MapPin, Sparkles } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, BarChart3, Square, Leaf, DollarSign, Info, Lightbulb, Beaker, Image as ImageIcon, X, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
@@ -28,7 +28,6 @@ import { Separator } from './ui/separator';
 const formSchemaObject = {
   cropType: z.string().min(1, 'Crop type is required.'),
   plotSize: z.coerce.number().min(0.01, "Plot size must be at least 0.01 acres."),
-  location: z.string().optional(),
   photoDataUri: z.string().optional(),
   ...Object.fromEntries(
     SOIL_PROPERTIES_CONFIG.map((prop) => [
@@ -58,7 +57,6 @@ export function CropYieldForm() {
     defaultValues: {
       cropType: '',
       plotSize: 2, // Default plot size
-      location: '',
       photoDataUri: undefined,
       ...Object.fromEntries(SOIL_PROPERTIES_CONFIG.map((prop) => [prop.id, prop.defaultValue])),
     },
@@ -140,7 +138,7 @@ export function CropYieldForm() {
             <Image src="https://placehold.co/80x80.png" alt="CropPredict Logo" width={80} height={80} className="rounded-lg mr-4" data-ai-hint="agriculture logo" />
             <div>
               <CardTitle className="text-3xl font-bold text-primary">CropPredict</CardTitle>
-              <CardDescription className="text-lg">AI-Powered Crop Yield & Value Estimator</CardDescription>
+              <CardDescription className="text-lg">AI-Powered Crop Yield & Value Estimator for India</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -232,32 +230,11 @@ export function CropYieldForm() {
                          value={field.value === undefined || isNaN(field.value as number) ? '' : field.value}
                         />
                       </FormControl>
-                       <FormDescription>Enter the total acreage of the plot.</FormDescription>
-                      <FormMessage />
+                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-
-                <FormField
-                  control={form.control}
-                  name="location"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-semibold text-lg mb-1 flex items-center">
-                        <MapPin className="mr-2 h-5 w-5 text-primary" />
-                        Location (Optional)
-                      </FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., Fresno, California" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Provide a location for a more accurate weather-based estimation.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
               <Card>
                  <CardHeader>

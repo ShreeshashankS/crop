@@ -14,7 +14,6 @@ import {z} from 'genkit';
 
 // Input schema mirroring the soil/environmental properties from the main form
 const SuggestCropInputSchema = z.object({
-  location: z.string().optional(),
   magnesium: z.number().optional(),
   sodium: z.number().optional(),
   nitrogen: z.number().optional(),
@@ -69,13 +68,11 @@ const prompt = ai.definePrompt({
   name: 'suggestSuitableCropPrompt',
   input: {schema: SuggestCropInputSchema},
   output: {schema: SuggestCropOutputSchema},
-  prompt: `You are an expert agricultural consultant. Your task is to suggest a list of 3 to 5 suitable crops based on the provided soil and environmental data.
+  prompt: `You are an expert agricultural consultant specializing in Indian agriculture. Your task is to suggest a list of 3 to 5 suitable crops based on the provided soil and environmental data.
 
-Analyze all the provided data points. For each suggested crop, provide a clear and concise reasoning explaining why it is a good fit for the given conditions.
+Analyze all the provided data points. For each suggested crop, provide a clear and concise reasoning explaining why it is a good fit for the given conditions in India.
 
-  {{#if location}}
-  Location: {{{location}}}
-  {{/if}}
+  Location Context: India
 
   Soil and Environmental Properties (only provided values are listed):
   {{#each this as |propertyValue propertyKey|}}
