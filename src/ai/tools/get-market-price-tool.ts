@@ -34,6 +34,7 @@ export const getMarketPriceTool = ai.defineTool(
     
     // In a real production app, you would use a robust, paid API with a real API key.
     // For this prototype, we'll use a placeholder URL and a fallback default price.
+    // The commodities-api.com service requires a paid subscription for real usage.
     const API_URL = `https://www.commodities-api.com/api/latest?access_key=DUMMY_API_KEY&symbols=${input.cropType.toUpperCase()}`;
     
     // A fallback default price in INR (approx $0.20) for demonstration purposes.
@@ -61,8 +62,9 @@ export const getMarketPriceTool = ai.defineTool(
       //    console.log(`[getMarketPriceTool] API request failed with status: ${response.status}. Using default.`);
       // }
 
-      // Since we are using a DUMMY_API_KEY, the above fetch will fail.
-      // We will log this and use the default price.
+      // IMPORTANT: Since we are using a DUMMY_API_KEY, the above fetch will fail.
+      // A real API key from a service like commodities-api.com (which requires a subscription) is needed for live data.
+      // We will log this and use the default price as a fallback.
       console.log("[getMarketPriceTool] API call skipped due to dummy API key. Using default fallback price.");
 
 
