@@ -179,12 +179,8 @@ export function CropYieldForm() {
                             <CommandInput 
                               placeholder="Search crop or type custom..."
                               onValueChange={(currentValue) => {
-                                  const matchedOption = DEFAULT_CROP_OPTIONS.find(crop => crop.label.toLowerCase() === currentValue.toLowerCase());
-                                  if (matchedOption) {
-                                    field.onChange(matchedOption.label);
-                                  } else {
-                                    field.onChange(currentValue);
-                                  }
+                                  // The user can type a custom value, so we just pass it up.
+                                  field.onChange(currentValue);
                               }}
                             />
                             <CommandList>
@@ -507,5 +503,3 @@ export function CropYieldForm() {
     </div>
   );
 }
-
-    
