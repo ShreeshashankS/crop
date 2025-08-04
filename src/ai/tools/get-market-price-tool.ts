@@ -20,16 +20,6 @@ const MarketPriceOutputSchema = z.object({
 type MarketPriceOutput = z.infer<typeof MarketPriceOutputSchema>;
 
 
-// A mapping from common crop names to API symbols
-const CROP_SYMBOL_MAP: { [key: string]: string } = {
-    corn: 'ZC',
-    wheat: 'ZW',
-    soybeans: 'ZS',
-    rice: 'ZR',
-    oats: 'ZO',
-    // Add other mappings as needed
-};
-
 export const getMarketPriceTool = ai.defineTool(
   {
     name: 'getMarketPrice',
@@ -42,63 +32,49 @@ export const getMarketPriceTool = ai.defineTool(
   async (input) => {
     console.log(`[getMarketPriceTool] Received request for: ${input.cropType}`);
     
-    // In a real production app, you would use a robust, paid API.
-    // For this prototype, we'll use a free, public API endpoint.
-    // Note: This free API has limitations and may not be suitable for production use.
-    const API_URL = 'https://www.commodities-api.com/api/latest?access_key=dummy_api_key_for_public_data&base=USD';
+    // In a real production app, you would use a robust, paid API with a real API key.
+    // For this prototype, we'll use a placeholder URL and a fallback default price.
+    const API_URL = `https://www.commodities-api.com/api/latest?access_key=DUMMY_API_KEY&symbols=${input.cropType.toUpperCase()}`;
     
-    // A fallback default price in INR (approx $0.20)
-    let priceInUSD = 0.20;
+    // A fallback default price in INR (approx $0.20) for demonstration purposes.
+    let priceInINR = 16.60;
     const currency = 'INR';
     const unit = 'kg';
 
     try {
-      // Find the commodity symbol for the given crop type
-      const cropKey = input.cropType.toLowerCase().split(' ')[0]; // 'corn' from 'Corn' or 'sweet corn'
-      const symbol = CROP_SYMBOL_MAP[cropKey];
+      console.log(`[getMarketPriceTool] Attempting to fetch live data for ${input.cropType}...`);
+      // const response = await fetch(API_URL);
+      // if (response.ok) {
+      //   const data = await response.json();
+      //   // NOTE: The parsing logic below is hypothetical and depends on the API's actual response structure.
+      //   // For example, if the API returns price in USD per ton:
+      //   const pricePerTonUSD = data?.rates?.[input.cropType.toUpperCase()];
+      //   if (pricePerTonUSD) {
+      //      const usdToInrRate = 83;
+      //      const tonsToKg = 1000;
+      //      priceInINR = (pricePerTonUSD / tonsToKg) * usdToInrRate;
+      //      console.log(`[getMarketPriceTool] Successfully fetched and converted price for ${input.cropType}: ₹${priceInINR.toFixed(2)}/kg`);
+      //   } else {
+      //      console.log(`[getMarketPriceTool] API did not return a price for ${input.cropType}. Using default.`);
+      //   }
+      // } else {
+      //    console.log(`[getMarketPriceTool] API request failed with status: ${response.status}. Using default.`);
+      // }
 
-      if (symbol) {
-        console.log(`[getMarketPriceTool] Mapped '${input.cropType}' to symbol '${symbol}'. Fetching data...`);
-        // This is a placeholder URL for demonstration. In a real scenario, you'd use a real API.
-        // For example: `https://api.some-data-provider.com/v1/price?symbol=${symbol}`
-        // Since we don't have a real-time free public API for specific futures,
-        // we will simulate by providing some realistic but fixed prices per bushel.
-        const pricePerBushel: { [key: string]: number } = {
-            'ZC': 4.50, // Corn price in USD per bushel
-            'ZW': 6.00, // Wheat price in USD per bushel
-            'ZS': 12.00, // Soybeans price in USD per bushel
-            'ZR': 17.00, // Rice price in USD per 100 lbs (cwt) - we'll adjust
-            'ZO': 3.50, // Oats price in USD per bushel
-        };
+      // Since we are using a DUMMY_API_KEY, the above fetch will fail.
+      // We will log this and use the default price.
+      console.log("[getMarketPriceTool] API call skipped due to dummy API key. Using default fallback price.");
 
-        const bushelToKg: { [key: string]: number } = {
-            'ZC': 25.4, // Corn
-            'ZW': 27.2, // Wheat
-            'ZS': 27.2, // Soybeans
-            'ZR': 45.36, // Rice (per cwt)
-            'ZO': 14.5, // Oats
-        };
-        
-        if (pricePerBushel[symbol]) {
-           const pricePerKgInUSD = pricePerBushel[symbol] / bushelToKg[symbol];
-           // Rough conversion to INR
-           const usdToInrRate = 83;
-           priceInUSD = pricePerKgInUSD * usdToInrRate;
-           console.log(`[getMarketPriceTool] Simulated fetch for ${symbol}: $${pricePerBushel[symbol]}/bushel -> ₹${priceInUSD.toFixed(2)}/kg`);
-        } else {
-             console.log(`[getMarketPriceTool] No simulated price for symbol '${symbol}'. Using default.`);
-        }
-      } else {
-        console.log(`[getMarketPriceTool] Could not map '${input.cropType}' to a known symbol. Using default price.`);
-      }
+
     } catch (error) {
       console.error('[getMarketPriceTool] Error fetching or processing market data:', error);
-      // If the API fails, we'll fall back to the default price.
+      // If the API fails for any reason, we'll log it and use the default price.
+      console.log("[getMarketPriceTool] An error occurred during the API call. Using default fallback price.");
     }
 
     // Return a structured response
     return {
-      price: parseFloat(priceInUSD.toFixed(2)),
+      price: parseFloat(priceInINR.toFixed(2)),
       currency,
       unit,
       cropType: input.cropType,
